@@ -1656,6 +1656,7 @@ dependencies = [
  "chrono",
  "jieba-rs",
  "serde",
+ "serde_json",
  "tantivy",
 ]
 

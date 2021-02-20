@@ -11,7 +11,7 @@ use jieba_rs::Jieba;
 use std::{sync::Arc, vec};
 
 #[derive(Clone)]
-struct Fields {
+pub struct Fields {
     url: Field,
     date: Field,
     tags: Field,
@@ -22,13 +22,14 @@ struct Fields {
 
 #[derive(Clone)]
 pub struct QuerySchema {
-    fields: Fields,
-    query_parser: QueryParser,
-    reader: IndexReader,
+    pub fields: Fields,
+    pub schema: Schema,
+    pub query_parser: QueryParser,
+    pub reader: IndexReader,
 }
 
 impl QuerySchema {
-    fn tokenizer() -> CangJieTokenizer {
+    pub fn tokenizer() -> CangJieTokenizer {
         CangJieTokenizer {
             worker: Arc::new(Jieba::empty()),
             option: TokenizerOption::Unicode,
@@ -40,27 +41,32 @@ impl QuerySchema {
             .set_tokenizer(CANG_JIE)
             .set_index_option(IndexRecordOption::WithFreqsAndPositions);
         let text_options = TextOptions::default().set_indexing_options(text_indeces);
-        schema_builder.add_text_field("title", text_options.clone());
-        schema_builder.add_text_field("content", text_options.clone());
-        schema_builder.add_text_field("url", TEXT | STORED);
-        schema_builder.add_i64_field("date", INDEXED | STORED);
+    schema_builder.add_text_field("title", text_options.clone());
+    schema_builder.add_text_field("content", text_options.clone());
+    schema_builder.add_i64_field("date", INDEXED);
+    schema_builder.add_text_field("tags", TEXT);
+    schema_builder.add_text_field("category", TEXT);
+    schema_builder.add_text_field("url", TEXT);
         schema_builder.build()
     }
     pub fn new(path: &str) -> Self {
-        let schema = Self::make_schema();
         let index = Index::open_in_dir(path).unwrap();
+        let schema = index.schema();
         index.tokenizers().register(CANG_JIE, Self::tokenizer());
+        let title = schema.get_field("title").unwrap();
+        let content = schema.get_field("content").unwrap();
         Self {
             fields: Fields {
                 url: schema.get_field("url").unwrap(),
                 tags: schema.get_field("tags").unwrap(),
                 date: schema.get_field("date").unwrap(),
-                title: schema.get_field("title").unwrap(),
-                content: schema.get_field("content").unwrap(),
+                title,
+                content,
                 category: schema.get_field("category").unwrap(),
             },
+            schema,
             query_parser: QueryParser::for_index(&index, vec![title, content]),
-            reader: index.reader().unwrap(),
+            reader: index.reader_builder().reload_policy(tantivy::ReloadPolicy::OnCommit).try_into().unwrap(),
         }
     }
 }

@@ -1,0 +1,15 @@
+[package]
+name = "search_api"
+version = "0.1.0"
+authors = ["WincerChan <WincerChan@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = { version = "3"}
+serde = { version = "1.0", features = ["derive"] }
+chrono = "0.4"
+tantivy = "0.14.0"
+cang-jie = "0.11.0"
+jieba-rs = {version = "0.6.2"}

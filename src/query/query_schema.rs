@@ -15,8 +15,8 @@ pub struct Fields {
     url: Field,
     date: Field,
     tags: Field,
-    title: Field,
-    content: Field,
+    pub title: Field,
+    pub content: Field,
     category: Field,
 }
 

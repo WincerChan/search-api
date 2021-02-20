@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use insert::init_schema;
 use serde::de::{Deserializer, Error, Unexpected};
 use serde::Deserialize;
-use tantivy::{collector::TopDocs, schema};
+use tantivy::{collector::TopDocs, SnippetGenerator};
 
 #[path="query/query_schema.rs"] mod query_schema;
 #[path="insert/insert.rs"] mod insert;
@@ -104,9 +104,11 @@ async fn greet(
     println!("{:#?}", q);
     
     let top_docs = searcher.search(&q, &TopDocs::with_limit(10)).unwrap();
+    let snip_gen = SnippetGenerator::create(&searcher, &*q, query_schema.fields.content).unwrap();
     for (_score, doc_addr) in top_docs {
         let retrieved_doc = searcher.doc(doc_addr).unwrap();
-        println!("{:#?}", query_schema.schema.to_named_doc(&retrieved_doc));
+        let s = snip_gen.snippet_from_doc(&retrieved_doc);
+        println!("{:#?}", s.to_html());
     }
     // let query = query_schema.query_parser(info.query).unwrap();
     // match info.foo {

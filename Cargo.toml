@@ -12,5 +12,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4"
 tantivy = "0.14.0"
-cang-jie = "0.11.0"
+cang-jie = { git = "https://github.com/diem-fork/cang-jie", branch = "dev" }
 jieba-rs = {version = "0.6.2"}

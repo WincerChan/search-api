@@ -1,0 +1,110 @@
+{
+  "segments": [
+    {
+      "segment_id": "4855ae7a-5f7c-4861-8574-29e333608c1e",
+      "max_doc": 10,
+      "deletes": null
+    },
+    {
+      "segment_id": "7e539583-b12d-45d3-8981-50d1ddf15a28",
+      "max_doc": 10,
+      "deletes": null
+    },
+    {
+      "segment_id": "248de514-167c-4286-a0dd-31613002b088",
+      "max_doc": 7,
+      "deletes": null
+    },
+    {
+      "segment_id": "8faf9209-8fc6-4a5e-b616-6d4e17d79fa3",
+      "max_doc": 7,
+      "deletes": null
+    },
+    {
+      "segment_id": "eac079a6-e765-4063-ae33-74d1fe6f861b",
+      "max_doc": 6,
+      "deletes": null
+    },
+    {
+      "segment_id": "768b7c5e-b4ff-4201-8f39-71d034f2b4fd",
+      "max_doc": 5,
+      "deletes": null
+    },
+    {
+      "segment_id": "9871067b-d73f-4983-a4b3-2485928fd8ca",
+      "max_doc": 5,
+      "deletes": null
+    },
+    {
+      "segment_id": "f477fde2-f1ca-45f6-97e0-d98bfef56528",
+      "max_doc": 5,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "title",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "CANG_JIE"
+        },
+        "stored": true
+      }
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "CANG_JIE"
+        },
+        "stored": true
+      }
+    },
+    {
+      "name": "date",
+      "type": "i64",
+      "options": {
+        "indexed": true,
+        "stored": true
+      }
+    },
+    {
+      "name": "tags",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "url",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": true
+      }
+    }
+  ],
+  "opstamp": 63
+}

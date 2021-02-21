@@ -1,14 +1,18 @@
+use actix_web::rt::System;
+use collector::TopDocs;
 use tantivy::{
-    query::QueryParser,
+    collector,
+    query::{BooleanQuery, Occur, Query, QueryParser, RangeQuery, TermQuery},
     schema::{
-        Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, INDEXED, STORED, TEXT,
+        Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, Value, INDEXED,
+        STORED, TEXT,
     },
-    DocAddress, Index, IndexReader, LeasedItem, Searcher,
+    DocAddress, Document, Index, IndexReader, LeasedItem, Searcher, SnippetGenerator,
 };
 
 use cang_jie::{CangJieTokenizer, TokenizerOption, CANG_JIE};
 use jieba_rs::Jieba;
-use std::{sync::Arc, vec};
+use std::{cmp::min, ops::Range, sync::Arc, time::SystemTime, vec};
 
 #[derive(Clone)]
 pub struct Fields {
@@ -35,19 +39,97 @@ impl QuerySchema {
             option: TokenizerOption::Unicode,
         }
     }
-    fn make_schema() -> Schema {
-        let mut schema_builder = Schema::builder();
-        let text_indeces = TextFieldIndexing::default()
-            .set_tokenizer(CANG_JIE)
-            .set_index_option(IndexRecordOption::WithFreqsAndPositions);
-        let text_options = TextOptions::default().set_indexing_options(text_indeces);
-    schema_builder.add_text_field("title", text_options.clone());
-    schema_builder.add_text_field("content", text_options.clone());
-    schema_builder.add_i64_field("date", INDEXED);
-    schema_builder.add_text_field("tags", TEXT);
-    schema_builder.add_text_field("category", TEXT);
-    schema_builder.add_text_field("url", TEXT);
-        schema_builder.build()
+    pub fn make_terms_query(
+        &self,
+        terms: &Vec<String>,
+        mut q_vecs: Vec<Box<dyn Query>>,
+    ) -> Vec<Box<dyn Query>> {
+        for term in terms {
+            let p = term.splitn(2, ":").collect::<Vec<&str>>();
+            match p[0] {
+                "tags" => q_vecs.push(Box::new(TermQuery::new(
+                    Term::from_field_text(self.fields.tags, &p[1].to_lowercase()),
+                    IndexRecordOption::Basic,
+                ))),
+                "category" => q_vecs.push(Box::new(TermQuery::new(
+                    Term::from_field_text(self.fields.category, &p[1]),
+                    IndexRecordOption::Basic,
+                ))),
+                _ => (),
+            }
+        }
+        return q_vecs;
+    }
+
+    pub fn make_keyword_query(&self, keyword: &str) -> (Box<dyn Query>, bool) {
+        (
+            self.query_parser.parse_query(keyword).unwrap(),
+            keyword != "",
+        )
+    }
+
+    pub fn make_date_query(
+        &self,
+        dates: &Vec<Option<i64>>,
+        mut q_vecs: Vec<Box<dyn Query>>,
+    ) -> Vec<Box<dyn Query>> {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let r = match dates[..] {
+            [Some(start), Some(stop)] => start..stop,
+            [Some(start), None] => start..(now as i64),
+            [None, Some(stop)] => 0..stop,
+            _ => return q_vecs,
+        };
+        let rq: Box<dyn Query> = Box::new(RangeQuery::new_i64(self.fields.date, r));
+        q_vecs.push(rq);
+        q_vecs
+    }
+    pub fn make_snippet_gen(
+        &self,
+        keyword_query: Box<dyn Query>,
+        field: Field,
+    ) -> SnippetGenerator {
+        let mut sp =
+            SnippetGenerator::create(&self.reader.searcher(), &keyword_query, field).unwrap();
+        sp.set_max_num_chars(380);
+        sp
+    }
+
+    pub fn make_snippet_value(
+        &self,
+        sp_gen: &Option<SnippetGenerator>,
+        doc: &Document,
+        field_value: &Value,
+    ) -> String {
+        match sp_gen {
+            Some(spg) => spg.snippet_from_doc(doc).to_html(),
+            None => {
+                let t = field_value.text().unwrap();
+                t.chars().take(140).skip(0).collect()
+            }
+        }
+    }
+
+    pub fn make_paginate(&self, pages: &Vec<usize>) -> TopDocs {
+        if pages.len() == 0 {
+            TopDocs::with_limit(1)
+        } else {
+            let page = pages[0];
+            let size = pages[1];
+            TopDocs::with_limit(size).and_offset((page - 1) * size)
+        }
+    }
+
+    pub fn make_bool_query(&self, q_vecs: Vec<Box<dyn Query>>) -> BooleanQuery {
+        BooleanQuery::from(
+            q_vecs
+                .into_iter()
+                .map(|q| (Occur::Must, q.box_clone()))
+                .collect::<Vec<(Occur, Box<dyn Query>)>>(),
+        )
     }
     pub fn new(path: &str) -> Self {
         let index = Index::open_in_dir(path).unwrap();
@@ -66,7 +148,11 @@ impl QuerySchema {
             },
             schema,
             query_parser: QueryParser::for_index(&index, vec![title, content]),
-            reader: index.reader_builder().reload_policy(tantivy::ReloadPolicy::OnCommit).try_into().unwrap(),
+            reader: index
+                .reader_builder()
+                .reload_policy(tantivy::ReloadPolicy::OnCommit)
+                .try_into()
+                .unwrap(),
         }
     }
 }

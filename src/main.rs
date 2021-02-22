@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize,
     de::{Deserializer, Error, Unexpected}
 };
-use std::env;
+use std::{env, fs};
 use tantivy::{
     collector::Count,
     schema::Value,
@@ -165,10 +165,17 @@ async fn main() -> std::io::Result<()> {
     match v.last() {
         Some(cli) => {
             if cli == "init" {
+                #[warn(unused_must_use)]
+                fs::remove_dir_all(&config.tantivy_db).unwrap();
                 migrate::init_schema(&config.tantivy_db, &config.blog_source);
                 println!("Initial Tantivy Schema Succeed!");
                 return Ok(());
-         }},
+            } else if cli == "migrate" {
+                migrate::init_schema(&config.tantivy_db, &config.blog_source);
+                println!("Initial Tantivy Schema Succeed!");
+                return Ok(());
+            }
+        },
         None => ()
     }
     use actix_web::{App, HttpServer};

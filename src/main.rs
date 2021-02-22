@@ -1,22 +1,19 @@
 use actix_web::{get, web, HttpResponse, Result};
 use chrono::NaiveDate;
-use insert::init_schema;
-use serde::de::{Deserializer, Error, Unexpected};
-use serde::{Deserialize, Serialize};
-use std::{env, time::Instant};
+use serde::{Deserialize, Serialize,
+    de::{Deserializer, Error, Unexpected}
+};
+use std::env;
 use tantivy::{
-    collector::{Count, TopDocs},
-    query::QueryClone,
+    collector::Count,
     schema::Value,
-    SnippetGenerator,
+    query::Query
 };
 
-#[path = "insert/insert.rs"]
-mod insert;
-#[path = "query/query_schema.rs"]
-mod query_schema;
-use tantivy::query::Query;
-const PATH: &str = "/tmp/data/";
+mod config;
+mod search;
+use search::QuerySchema;
+mod migrate;
 
 #[derive(Deserialize)]
 struct Thing {
@@ -106,7 +103,7 @@ where
 #[get("/")]
 async fn greet(
     info: web::Query<Thing>,
-    qs: web::Data<query_schema::QuerySchema>,
+    qs: web::Data<QuerySchema>,
 ) -> Result<HttpResponse> {
     let query_schema = qs.get_ref();
     let mut box_qs: Vec<Box<dyn Query>> = Vec::new();
@@ -155,29 +152,30 @@ async fn greet(
             snippet,
         });
     }
-    // let query = query_schema.query_parser(info.query).unwrap();
-    // match info.foo {
-    // Some(ref r) => Ok(format!("range {}", r)),
     Ok(HttpResponse::Ok().json(Response {
         count: num,
         data: results,
     }))
-    // None => Ok("fdjklf".to_lowercase()),
-    // }
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let v = env::args().collect::<Vec<String>>();
-    if v.len() >= 2 {
-        init_schema(&v[1]);
-        return Ok(());
+    let config = config::read_config();
+    match v.last() {
+        Some(cli) => {
+            if cli == "init" {
+                migrate::init_schema(&config.tantivy_db, &config.blog_source);
+                println!("Initial Tantivy Schema Succeed!");
+                return Ok(());
+         }},
+        None => ()
     }
     use actix_web::{App, HttpServer};
-    let qs = query_schema::QuerySchema::new(PATH);
+    let qs = QuerySchema::new(&config.tantivy_db);
 
     HttpServer::new(move || App::new().data(qs.clone()).service(greet))
-        .bind("127.0.0.1:7007")?
+        .bind(config.listen_addr)?
         .run()
         .await
 }

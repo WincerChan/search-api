@@ -1,18 +1,17 @@
-use actix_web::rt::System;
 use collector::TopDocs;
 use tantivy::{
     collector,
     query::{BooleanQuery, Occur, Query, QueryParser, RangeQuery, TermQuery},
     schema::{
-        Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, Value, INDEXED,
-        STORED, TEXT,
+        Field, IndexRecordOption, Schema, Term,  Value
     },
-    DocAddress, Document, Index, IndexReader, LeasedItem, Searcher, SnippetGenerator,
+    Document, Index, IndexReader, SnippetGenerator,
 };
 
 use cang_jie::{CangJieTokenizer, TokenizerOption, CANG_JIE};
 use jieba_rs::Jieba;
-use std::{cmp::min, ops::Range, sync::Arc, time::SystemTime, vec};
+use std::{sync::Arc, time::SystemTime, vec};
+
 
 #[derive(Clone)]
 pub struct Fields {
@@ -104,12 +103,17 @@ impl QuerySchema {
         doc: &Document,
         field_value: &Value,
     ) -> String {
+        let value_str = field_value.text().unwrap().chars().take(140).skip(0).collect();
         match sp_gen {
-            Some(spg) => spg.snippet_from_doc(doc).to_html(),
-            None => {
-                let t = field_value.text().unwrap();
-                t.chars().take(140).skip(0).collect()
-            }
+            Some(spg) => {
+                let sp = spg.snippet_from_doc(doc).to_html();
+                if sp == "" {
+                    value_str
+                } else {
+                    sp
+                }
+            },
+            None => value_str,
         }
     }
 

@@ -1,19 +1,24 @@
-use actix_web::{get, web, HttpResponse, Result};
 use chrono::NaiveDate;
 use serde::{
     de::{Deserializer, Error, Unexpected},
     Deserialize, Serialize,
 };
-use std::{env, io::BufWriter};
+use std::{env, fs, path::Path};
 use tantivy::{collector::Count, query::Query, schema::Value};
 
+use async_std::io::{
+    prelude::{BufReadExt, WriteExt},
+    BufReader,
+};
+use async_std::os::unix::net::{UnixListener, UnixStream};
+use async_std::prelude::*;
 mod config;
 mod search;
 use search::QuerySchema;
 mod migrate;
 
-#[derive(Deserialize)]
-struct Thing {
+#[derive(Deserialize, Debug)]
+struct QueryParams {
     #[serde(default)]
     q: String,
     #[serde(default, deserialize_with = "validate_range")]
@@ -97,9 +102,7 @@ where
     Ok(pages)
 }
 
-#[get("/")]
-async fn greet(info: web::Query<Thing>, qs: web::Data<QuerySchema>) -> Result<HttpResponse> {
-    let query_schema = qs.get_ref();
+fn execute(info: QueryParams, query_schema: QuerySchema) -> String {
     let mut box_qs: Vec<Box<dyn Query>> = Vec::new();
     let (keyword_query, true_query) = query_schema.make_keyword_query(&info.q);
     if true_query {
@@ -146,84 +149,61 @@ async fn greet(info: web::Query<Thing>, qs: web::Data<QuerySchema>) -> Result<Ht
             snippet,
         });
     }
-    Ok(HttpResponse::Ok().json(Response {
+    let se_result = serde_json::json!(Response {
         count: num,
         data: results,
-    }))
+    });
+    se_result.to_string()
 }
-// async fn serv_query(mut stream: UnixStream) {
-//     println!("first");
-//     stream.readable().await.unwrap();
-//     println!("fjdljafl");
-//     let mut response = Vec::new();
-//     stream.try_read(&mut response);
-//     println!("{:#?}", response);
-// }
 
-// async fn loop_accept(path: &str) {
-//     let listener = UnixListener::bind(path).await.unwrap();
-//     let mut incoming = listener.incoming();
-//     while let Some(stream) = incoming.next().await {
-//         let stream = stream.unwrap();
-//         find_result(stream)
-//     }
-// }
-use std::io::prelude::*;
-use std::io::{BufRead, BufReader, LineWriter};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::thread;
-
-fn handle_client(stream: UnixStream) {
-    let stream_reader = BufReader::new(&stream);
-    let mut stream_writer = LineWriter::new(&stream);
-    for line in stream_reader.lines() {
-        stream_writer.write("fjlfjl;a\n".as_bytes());
-        println!("{}", line.unwrap());
+async fn accept_serv(mut stream: UnixStream, qs: QuerySchema) {
+    let mut lines = BufReader::new(stream.clone()).lines();
+    while let Some(line) = lines.next().await {
+        let query_str = line.unwrap();
+        let p: QueryParams = serde_json::from_str(query_str.as_str()).unwrap();
+        let result = execute(p, qs.clone());
+        stream.write(result.as_bytes()).await.unwrap();
+        stream.flush().await.unwrap();
     }
     println!("end")
 }
 
-fn main() {
-    let listener = UnixListener::bind("/tmp/rust-uds.sock").unwrap();
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                thread::spawn(|| handle_client(stream));
-            }
-            Err(err) => {
-                println!("Error: {}", err);
-                break;
-            }
-        }
+async fn loop_accept(socket_path: &str, qs: QuerySchema) {
+    if Path::new(socket_path).exists() {
+        fs::remove_file(socket_path).unwrap();
+    }
+    let listener = UnixListener::bind(socket_path).await.unwrap();
+    let mut incoming = listener.incoming();
+    while let Some(stream) = incoming.next().await {
+        let stream = stream.unwrap();
+        accept_serv(stream, qs.clone()).await;
     }
 }
-// #[actix_web::main]
-// async fn main() -> std::io::Result<()> {
-//     let v = env::args().collect::<Vec<String>>();
-//     let config = config::read_config();
-//     loop_accept(&config.listen_addr);
-//     match v.last() {
-//         Some(cli) => {
-//             if cli == "init" {
-//                 migrate::create_dir(&config.tantivy_db);
-//                 migrate::init_schema(&config.tantivy_db, &config.blog_source);
-//                 println!("Initial Tantivy Schema Succeed!");
-//                 return Ok(());
-//             } else if cli == "migrate" {
-//                 migrate::init_schema(&config.tantivy_db, &config.blog_source);
-//                 println!("Initial Tantivy Schema Succeed!");
-//                 return Ok(());
-//             }
-//         }
-//         None => (),
-//     }
-//     use actix_web::{App, HttpServer};
-//     let qs = QuerySchema::new(&config.tantivy_db);
-//     println!("Listening: {:#?}", config.listen_addr);
-
-//     HttpServer::new(move || App::new().data(qs.clone()).service(greet))
-//         .bind(config.listen_addr)?
-//         .run()
-//         .await
-// }
+#[async_std::main]
+async fn main() {
+    let args = env::args().collect::<Vec<String>>();
+    if args.len() == 1 {
+        println!(
+            "Run with one argument: 
+        1. init (Initial tanitvy schema and database. this will empty exists directory.)
+        2. migrate (Append new article to exists directory.)
+        3. run (run server with unix domain socket.)"
+        );
+        return;
+    }
+    let config = config::read_config();
+    match args[1].as_ref() {
+        "init" => {
+            migrate::create_dir(&config.tantivy_db);
+            migrate::init_schema(&config.tantivy_db, &config.blog_source);
+        }
+        "migrate" => {
+            migrate::init_schema(&config.tantivy_db, &config.blog_source);
+        }
+        "run" => {
+            let qs = QuerySchema::new(&config.tantivy_db);
+            loop_accept(&config.listen_addr, qs).await;
+        }
+        _ => (),
+    }
+}

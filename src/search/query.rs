@@ -2,16 +2,13 @@ use collector::TopDocs;
 use tantivy::{
     collector,
     query::{BooleanQuery, Occur, Query, QueryParser, RangeQuery, TermQuery},
-    schema::{
-        Field, IndexRecordOption, Schema, Term,  Value
-    },
+    schema::{Field, IndexRecordOption, Schema, Term, Value},
     Document, Index, IndexReader, SnippetGenerator,
 };
 
 use cang_jie::{CangJieTokenizer, TokenizerOption, CANG_JIE};
 use jieba_rs::Jieba;
-use std::{sync::Arc, time::SystemTime, vec};
-
+use std::{sync::Arc, vec};
 
 #[derive(Clone)]
 pub struct Fields {
@@ -60,29 +57,17 @@ impl QuerySchema {
         return q_vecs;
     }
 
-    pub fn make_keyword_query(&self, keyword: &str) -> (Box<dyn Query>, bool) {
-        (
-            self.query_parser.parse_query(keyword).unwrap(),
-            keyword != "",
-        )
+    pub fn make_keyword_query(&self, keyword: &str) -> Box<dyn Query> {
+        self.query_parser.parse_query(keyword).unwrap()
     }
 
     pub fn make_date_query(
         &self,
-        dates: &Vec<Option<i64>>,
+        dates: &Vec<i64>,
         mut q_vecs: Vec<Box<dyn Query>>,
     ) -> Vec<Box<dyn Query>> {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let r = match dates[..] {
-            [Some(start), Some(stop)] => start..stop,
-            [Some(start), None] => start..(now as i64),
-            [None, Some(stop)] => 0..stop,
-            _ => return q_vecs,
-        };
-        let rq: Box<dyn Query> = Box::new(RangeQuery::new_i64(self.fields.date, r));
+        let rq: Box<dyn Query> =
+            Box::new(RangeQuery::new_i64(self.fields.date, dates[0]..dates[1]));
         q_vecs.push(rq);
         q_vecs
     }
@@ -90,11 +75,11 @@ impl QuerySchema {
         &self,
         keyword_query: Box<dyn Query>,
         field: Field,
-    ) -> SnippetGenerator {
-        let mut sp =
+    ) -> Option<SnippetGenerator> {
+        let mut spg =
             SnippetGenerator::create(&self.reader.searcher(), &keyword_query, field).unwrap();
-        sp.set_max_num_chars(380);
-        sp
+        spg.set_max_num_chars(380);
+        Some(spg)
     }
 
     pub fn make_snippet_value(
@@ -103,7 +88,13 @@ impl QuerySchema {
         doc: &Document,
         field_value: &Value,
     ) -> String {
-        let value_str = field_value.text().unwrap().chars().take(140).skip(0).collect();
+        let value_str = field_value
+            .text()
+            .unwrap()
+            .chars()
+            .take(140)
+            .skip(0)
+            .collect();
         match sp_gen {
             Some(spg) => {
                 let sp = spg.snippet_from_doc(doc).to_html();
@@ -112,7 +103,7 @@ impl QuerySchema {
                 } else {
                     sp
                 }
-            },
+            }
             None => value_str,
         }
     }

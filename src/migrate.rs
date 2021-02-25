@@ -1,3 +1,3 @@
 pub mod init;
 
-pub use init::init_schema;
+pub use init::{create_dir, init_schema};

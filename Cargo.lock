@@ -205,9 +205,8 @@ checksum = "631ae5198c9be5e753e5cc215e1bd73c2b466a3565173db433f52bb9d3e66dba"
 
 [[package]]
 name = "cang-jie"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "795da110643104aae7631f8b78e99e5f6be41c51016c38decf81155470601d62"
+version = "0.11.0"
+source = "git+https://github.com/diem-fork/cang-jie?branch=dev#adaa20838efcc79210acb1dddc0ba2b75b9d9447"
 dependencies = [
  "jieba-rs",
  "log",

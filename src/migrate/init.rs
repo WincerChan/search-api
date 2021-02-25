@@ -1,15 +1,19 @@
 use tantivy::{
-    schema::{
-        IndexRecordOption, Schema, TextFieldIndexing, TextOptions, INDEXED,
-        STORED, TEXT,
-    },
-    Index
+    schema::{IndexRecordOption, Schema, TextFieldIndexing, TextOptions, INDEXED, STORED, TEXT},
+    Index,
 };
 
 use crate::search::QuerySchema;
 use cang_jie::CANG_JIE;
 use serde_json::Value;
-use std::fs;
+use std::{fs, path::Path};
+
+pub fn create_dir(path: &str) {
+    if Path::new(path).exists() {
+        fs::remove_dir_all(path).unwrap();
+    }
+    fs::create_dir_all(path).unwrap();
+}
 
 pub fn init_schema(path: &str, source: &str) {
     let mut schema_builder = Schema::builder();

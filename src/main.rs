@@ -1,10 +1,9 @@
-use chrono::NaiveDate;
 use serde::{
     de::{Deserializer, Error, Unexpected},
     Deserialize, Serialize,
 };
 use std::{env, fs, path::Path};
-use tantivy::{collector::Count, query::Query, schema::Value};
+use tantivy::{collector::Count, query::Query, schema::Value, SnippetGenerator};
 
 use async_std::io::{
     prelude::{BufReadExt, WriteExt},
@@ -21,8 +20,8 @@ mod migrate;
 struct QueryParams {
     #[serde(default)]
     q: String,
-    #[serde(default, deserialize_with = "validate_range")]
-    range: Vec<Option<i64>>,
+    #[serde(deserialize_with = "validate_range")]
+    range: Vec<i64>,
     #[serde(default, deserialize_with = "validate_pages")]
     pages: Vec<usize>,
     #[serde(default, deserialize_with = "validate_terms")]
@@ -35,6 +34,11 @@ struct Hit {
     date: Value,
     title: String,
     snippet: String,
+}
+
+#[derive(Serialize)]
+struct Err {
+    err_msg: String,
 }
 
 #[derive(Serialize)]
@@ -52,31 +56,15 @@ where
     Ok(terms.collect())
 }
 
-fn validate_range<'de, D>(d: D) -> Result<Vec<Option<i64>>, D::Error>
+fn validate_range<'de, D>(d: D) -> Result<Vec<i64>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let value = String::deserialize(d)?;
-    let str_values: Vec<&str> = value.split("~").collect();
-    let mut ranges: Vec<Option<i64>> = Vec::with_capacity(2);
-    let err = Err(Error::invalid_value(
-        Unexpected::Str(&value),
-        &"ISO 8601 date format",
-    ));
-    if str_values.len() != 2 {
-        return err;
-    }
-    for strv in str_values {
-        if strv.is_empty() {
-            ranges.push(None)
-        } else {
-            match NaiveDate::parse_from_str(strv, "%Y-%m-%d") {
-                Ok(v) => ranges.push(Some(v.and_hms(0, 0, 0).timestamp())),
-                Err(_) => return err,
-            }
-        }
-    }
-    Ok(ranges)
+    Ok(value
+        .split("~")
+        .map(|v| v.parse::<i64>().unwrap())
+        .collect())
 }
 
 fn validate_pages<'de, D>(d: D) -> Result<Vec<usize>, D::Error>
@@ -88,7 +76,7 @@ where
     let str_values: Vec<&str> = value.split("-").collect();
     let err = Err(Error::invalid_value(
         Unexpected::Str(&value),
-        &"invalid format",
+        &"pages format: x-y",
     ));
     if str_values.len() != 2 {
         return err;
@@ -103,11 +91,16 @@ where
 }
 
 fn execute(info: QueryParams, query_schema: QuerySchema) -> String {
-    let mut box_qs: Vec<Box<dyn Query>> = Vec::new();
-    let (keyword_query, true_query) = query_schema.make_keyword_query(&info.q);
-    if true_query {
-        box_qs.push(keyword_query.box_clone())
-    }
+    let mut content_gen: Option<SnippetGenerator> = None;
+    let mut title_gen: Option<SnippetGenerator> = None;
+    let mut box_qs: Vec<Box<dyn Query>> = if &info.q == "" {
+        Vec::new()
+    } else {
+        let kq = query_schema.make_keyword_query(&info.q);
+        content_gen = query_schema.make_snippet_gen(kq.box_clone(), query_schema.fields.content);
+        title_gen = query_schema.make_snippet_gen(kq.box_clone(), query_schema.fields.title);
+        vec![kq]
+    };
     box_qs = query_schema.make_terms_query(&info.terms, box_qs);
     box_qs = query_schema.make_date_query(&info.range, box_qs);
     let bool_qs = query_schema.make_bool_query(box_qs);
@@ -116,32 +109,12 @@ fn execute(info: QueryParams, query_schema: QuerySchema) -> String {
     let (top_docs, num) = searcher
         .search(&bool_qs, &(query_schema.make_paginate(&info.pages), Count))
         .unwrap();
-    let content_snippet_gen = match true_query {
-        true => Some(
-            query_schema.make_snippet_gen(keyword_query.box_clone(), query_schema.fields.content),
-        ),
-        false => None,
-    };
-    let title_snippet_gen = match true_query {
-        true => Some(
-            query_schema.make_snippet_gen(keyword_query.box_clone(), query_schema.fields.title),
-        ),
-        false => None,
-    };
     let mut results: Vec<Hit> = Vec::with_capacity(10);
     for (_score, doc_addr) in top_docs {
-        let retrieved_doc = searcher.doc(doc_addr).unwrap();
-        let values = retrieved_doc.get_sorted_field_values();
-        let title = query_schema.make_snippet_value(
-            &title_snippet_gen,
-            &retrieved_doc,
-            values[0].1[0].value(),
-        );
-        let snippet = query_schema.make_snippet_value(
-            &content_snippet_gen,
-            &retrieved_doc,
-            values[1].1[0].value(),
-        );
+        let doc = searcher.doc(doc_addr).unwrap();
+        let values = doc.get_sorted_field_values();
+        let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
+        let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
         results.push(Hit {
             url: values[3].1[0].value().clone(),
             date: values[2].1[0].value().clone(),
@@ -158,14 +131,33 @@ fn execute(info: QueryParams, query_schema: QuerySchema) -> String {
 
 async fn accept_serv(mut stream: UnixStream, qs: QuerySchema) {
     let mut lines = BufReader::new(stream.clone()).lines();
+    // println!("accept new client");
     while let Some(line) = lines.next().await {
         let query_str = line.unwrap();
-        let p: QueryParams = serde_json::from_str(query_str.as_str()).unwrap();
-        let result = execute(p, qs.clone());
-        stream.write(result.as_bytes()).await.unwrap();
-        stream.flush().await.unwrap();
+        // println!("{:#?}", query_str);
+        let v = serde_json::from_str(query_str.as_str());
+        match v {
+            Ok(p) => {
+                let mut result = execute(p, qs.clone());
+                // println!("{:#?}", result);
+                result.push('\n');
+                match stream.write(result.as_bytes()).await {
+                    Ok(_) => (),
+                    Err(_) => break,
+                }
+                stream.flush().await.unwrap();
+            }
+            Err(e) => {
+                let mut ret = serde_json::json!(Err {
+                    err_msg: e.to_string()
+                })
+                .to_string();
+                ret.push('\n');
+                stream.write(ret.as_bytes()).await.unwrap();
+                stream.flush().await.unwrap();
+            }
+        }
     }
-    println!("end")
 }
 
 async fn loop_accept(socket_path: &str, qs: QuerySchema) {

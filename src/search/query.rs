@@ -37,10 +37,10 @@ impl QuerySchema {
     }
     pub fn make_terms_query(
         &self,
-        terms: &Vec<String>,
+        terms: &str,
         mut q_vecs: Vec<Box<dyn Query>>,
     ) -> Vec<Box<dyn Query>> {
-        for term in terms {
+        for term in terms.split(" ") {
             let p = term.splitn(2, ":").collect::<Vec<&str>>();
             match p[0] {
                 "tags" => q_vecs.push(Box::new(TermQuery::new(
@@ -63,11 +63,14 @@ impl QuerySchema {
 
     pub fn make_date_query(
         &self,
-        dates: &Vec<i64>,
+        dates: &str,
         mut q_vecs: Vec<Box<dyn Query>>,
     ) -> Vec<Box<dyn Query>> {
-        let rq: Box<dyn Query> =
-            Box::new(RangeQuery::new_i64(self.fields.date, dates[0]..dates[1]));
+        let dts: Vec<i64> = dates
+            .split("~")
+            .map(|x| x.parse::<i64>().unwrap())
+            .collect();
+        let rq: Box<dyn Query> = Box::new(RangeQuery::new_i64(self.fields.date, dts[0]..dts[1]));
         q_vecs.push(rq);
         q_vecs
     }
@@ -108,14 +111,14 @@ impl QuerySchema {
         }
     }
 
-    pub fn make_paginate(&self, pages: &Vec<usize>) -> TopDocs {
-        if pages.len() == 0 {
-            TopDocs::with_limit(1)
-        } else {
-            let page = pages[0];
-            let size = pages[1];
-            TopDocs::with_limit(size).and_offset((page - 1) * size)
-        }
+    pub fn make_paginate(&self, pages: &str) -> TopDocs {
+        let pgs: Vec<usize> = pages
+            .split("-")
+            .map(|x| x.parse::<usize>().unwrap())
+            .collect();
+        let page = pgs[0];
+        let size = pgs[1];
+        TopDocs::with_limit(size).and_offset((page - 1) * size)
     }
 
     pub fn make_bool_query(&self, q_vecs: Vec<Box<dyn Query>>) -> BooleanQuery {
@@ -132,6 +135,8 @@ impl QuerySchema {
         index.tokenizers().register(CANG_JIE, Self::tokenizer());
         let title = schema.get_field("title").unwrap();
         let content = schema.get_field("content").unwrap();
+        let mut query_parser = QueryParser::for_index(&index, vec![title, content]);
+        query_parser.set_conjunction_by_default();
         Self {
             fields: Fields {
                 url: schema.get_field("url").unwrap(),
@@ -142,7 +147,7 @@ impl QuerySchema {
                 category: schema.get_field("category").unwrap(),
             },
             schema,
-            query_parser: QueryParser::for_index(&index, vec![title, content]),
+            query_parser: query_parser,
             reader: index
                 .reader_builder()
                 .reload_policy(tantivy::ReloadPolicy::OnCommit)

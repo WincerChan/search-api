@@ -77,7 +77,10 @@ fn handle_client(stream: UnixStream, qs: QuerySchema) {
         let v: Vec<&str> = params.split(0 as char).collect();
         let mut result = execute(v[0], v[1], v[2], v[3], qs.clone());
         result.push('\n');
-        stream_writer.write_all(result.as_bytes());
+        match stream_writer.write_all(result.as_bytes()) {
+            Ok(_) => (),
+            Err(err) => println!("{:?}", err),
+        }
     }
 }
 

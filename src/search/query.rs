@@ -81,7 +81,7 @@ impl QuerySchema {
     ) -> Option<SnippetGenerator> {
         let mut spg =
             SnippetGenerator::create(&self.reader.searcher(), &keyword_query, field).unwrap();
-        spg.set_max_num_chars(380);
+        spg.set_max_num_chars(300);
         Some(spg)
     }
 

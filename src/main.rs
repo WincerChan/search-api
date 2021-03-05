@@ -88,6 +88,7 @@ fn loop_accept(socket_path: &str, qs: QuerySchema) {
     if Path::new(socket_path).exists() {
         fs::remove_file(socket_path).unwrap();
     }
+    println!("Listening on file {:}", socket_path);
     let listener = UnixListener::bind(socket_path).unwrap();
     for stream in listener.incoming() {
         let tmp = qs.clone();

@@ -70,7 +70,6 @@ impl QuerySchema {
     }
 
     pub fn make_keyword_query(&self, keyword: &str) -> Box<dyn Query> {
-        let mut querys: Vec<(Occur, Box<dyn Query>)> = Vec::with_capacity(10);
         let (mut must, mut mustnot) = (Vec::new(), Vec::new());
         for key in keyword.split(" ") {
             if key.starts_with("-") {
@@ -79,24 +78,14 @@ impl QuerySchema {
                 must.push(key)
             }
         }
-        for word in self.worker.cut(&must.join(" "), false) {
-            if word == " " {
-                continue;
-            }
-            querys.push((Occur::Must, self.make_field_search(word, Occur::Should)))
-        }
-        let mut submustnot = Vec::new();
-        for word in self.worker.cut(&mustnot.join(" "), false) {
-            if word == " " {
-                continue;
-            }
-            submustnot.push((Occur::Must, self.make_field_search(word, Occur::Should)))
-        }
+        let mut querys: Vec<(Occur, Box<dyn Query>)> = self.worker.cut(&must.join(" "), false).into_iter()
+        .filter(|x| x != &" ").map(|x| (Occur::Must, self.make_field_search(x, Occur::Should))).collect();
+
+        let submustnot = self.worker.cut(&mustnot.join(" "), false).into_iter()
+        .filter(|x| x != &" ").map(|x| (Occur::Must, self.make_field_search(x, Occur::Should))).collect();
+
         querys.push((Occur::MustNot, Box::new(BooleanQuery::new(submustnot))));
         Box::new(BooleanQuery::new(querys))
-        // let qq = self.query_parser.parse_query(keyword).unwrap();
-        // println!("after parse {:#?}", qq);
-        // qq
     }
 
     pub fn make_date_query(

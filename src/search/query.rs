@@ -26,13 +26,14 @@ pub struct QuerySchema {
     pub schema: Schema,
     pub query_parser: QueryParser,
     pub reader: IndexReader,
+    worker: Arc<Jieba>,
 }
 
 impl QuerySchema {
     pub fn tokenizer() -> CangJieTokenizer {
         CangJieTokenizer {
-            worker: Arc::new(Jieba::empty()),
-            option: TokenizerOption::Unicode,
+            worker: Arc::new(Jieba::new()),
+            option: TokenizerOption::Default { hmm: false },
         }
     }
     pub fn make_terms_query(
@@ -57,8 +58,47 @@ impl QuerySchema {
         return q_vecs;
     }
 
+    fn make_field_search(&self, word: &str, op: Occur) -> Box<dyn Query> {
+        let t = Box::new(TermQuery::new(
+            Term::from_field_text(self.fields.title, word),
+            IndexRecordOption::WithFreqsAndPositions,
+        ));
+        let c = Box::new(TermQuery::new(
+            Term::from_field_text(self.fields.content, word),
+            IndexRecordOption::WithFreqsAndPositions,
+        ));
+        Box::new(BooleanQuery::new(vec![(op, t), (op, c)]))
+    }
+
+    fn make_subqueries(&self, words: Vec<&str>) -> Vec<(Occur, Box<dyn Query>)> {
+        self.worker
+            .cut(&words.join(" "), false)
+            .into_iter()
+            .filter(|x| x != &" ")
+            .map(|x| {
+                (
+                    Occur::Must,
+                    self.make_field_search(&x.to_lowercase(), Occur::Should),
+                )
+            })
+            .collect()
+    }
+
     pub fn make_keyword_query(&self, keyword: &str) -> Box<dyn Query> {
-        self.query_parser.parse_query(keyword).unwrap()
+        let (mut must, mut mustnot) = (Vec::new(), Vec::new());
+        for key in keyword.split(" ") {
+            if key.starts_with("-") {
+                mustnot.push(&key[1..])
+            } else {
+                must.push(key)
+            }
+        }
+
+        let mut querys = self.make_subqueries(must);
+        let mustnot = self.make_subqueries(mustnot);
+
+        querys.push((Occur::MustNot, Box::new(BooleanQuery::new(mustnot))));
+        Box::new(BooleanQuery::new(querys))
     }
 
     pub fn make_date_query(
@@ -132,12 +172,14 @@ impl QuerySchema {
     pub fn new(path: &str) -> Self {
         let index = Index::open_in_dir(path).unwrap();
         let schema = index.schema();
-        index.tokenizers().register(CANG_JIE, Self::tokenizer());
+        let token = Self::tokenizer();
+        index.tokenizers().register(CANG_JIE, token.clone());
         let title = schema.get_field("title").unwrap();
         let content = schema.get_field("content").unwrap();
         let mut query_parser = QueryParser::for_index(&index, vec![title, content]);
         query_parser.set_conjunction_by_default();
         Self {
+            worker: token.worker,
             fields: Fields {
                 url: schema.get_field("url").unwrap(),
                 tags: schema.get_field("tags").unwrap(),

@@ -26,14 +26,14 @@ pub struct QuerySchema {
     pub schema: Schema,
     pub query_parser: QueryParser,
     pub reader: IndexReader,
-    worker: Arc<Jieba>
+    worker: Arc<Jieba>,
 }
 
 impl QuerySchema {
     pub fn tokenizer() -> CangJieTokenizer {
         CangJieTokenizer {
             worker: Arc::new(Jieba::new()),
-            option: TokenizerOption::Default{hmm: false},
+            option: TokenizerOption::Default { hmm: false },
         }
     }
     pub fn make_terms_query(
@@ -57,16 +57,31 @@ impl QuerySchema {
         }
         return q_vecs;
     }
-    
+
     fn make_field_search(&self, word: &str, op: Occur) -> Box<dyn Query> {
-        let t = Box::new(TermQuery::new(Term::from_field_text(self.fields.title, word),
-        IndexRecordOption::WithFreqsAndPositions));
-        let c = Box::new(TermQuery::new(Term::from_field_text(self.fields.content, word),
-        IndexRecordOption::WithFreqsAndPositions));
-        Box::new(BooleanQuery::new(vec![
-            (op, t),
-            (op, c)
-        ]))
+        let t = Box::new(TermQuery::new(
+            Term::from_field_text(self.fields.title, word),
+            IndexRecordOption::WithFreqsAndPositions,
+        ));
+        let c = Box::new(TermQuery::new(
+            Term::from_field_text(self.fields.content, word),
+            IndexRecordOption::WithFreqsAndPositions,
+        ));
+        Box::new(BooleanQuery::new(vec![(op, t), (op, c)]))
+    }
+
+    fn make_subqueries(&self, words: Vec<&str>) -> Vec<(Occur, Box<dyn Query>)> {
+        self.worker
+            .cut(&words.join(" "), false)
+            .into_iter()
+            .filter(|x| x != &" ")
+            .map(|x| {
+                (
+                    Occur::Must,
+                    self.make_field_search(&x.to_lowercase(), Occur::Should),
+                )
+            })
+            .collect()
     }
 
     pub fn make_keyword_query(&self, keyword: &str) -> Box<dyn Query> {
@@ -78,13 +93,11 @@ impl QuerySchema {
                 must.push(key)
             }
         }
-        let mut querys: Vec<(Occur, Box<dyn Query>)> = self.worker.cut(&must.join(" "), false).into_iter()
-        .filter(|x| x != &" ").map(|x| (Occur::Must, self.make_field_search(x, Occur::Should))).collect();
 
-        let submustnot = self.worker.cut(&mustnot.join(" "), false).into_iter()
-        .filter(|x| x != &" ").map(|x| (Occur::Must, self.make_field_search(x, Occur::Should))).collect();
+        let mut querys = self.make_subqueries(must);
+        let mustnot = self.make_subqueries(mustnot);
 
-        querys.push((Occur::MustNot, Box::new(BooleanQuery::new(submustnot))));
+        querys.push((Occur::MustNot, Box::new(BooleanQuery::new(mustnot))));
         Box::new(BooleanQuery::new(querys))
     }
 

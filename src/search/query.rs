@@ -20,6 +20,8 @@ pub struct Fields {
     category: Field,
 }
 
+static DELIMITER: &str = ",";
+
 #[derive(Clone)]
 pub struct QuerySchema {
     pub fields: Fields,
@@ -33,7 +35,7 @@ impl QuerySchema {
     pub fn tokenizer() -> CangJieTokenizer {
         CangJieTokenizer {
             worker: Arc::new(Jieba::new()),
-            option: TokenizerOption::Default { hmm: false },
+            option: TokenizerOption::ForSearch { hmm: false },
         }
     }
     pub fn make_terms_query(
@@ -41,7 +43,7 @@ impl QuerySchema {
         terms: &str,
         mut q_vecs: Vec<Box<dyn Query>>,
     ) -> Vec<Box<dyn Query>> {
-        for term in terms.split(" ") {
+        for term in terms.split(DELIMITER) {
             let p = term.splitn(2, ":").collect::<Vec<&str>>();
             match p[0] {
                 "tags" => q_vecs.push(Box::new(TermQuery::new(
@@ -86,7 +88,7 @@ impl QuerySchema {
 
     pub fn make_keyword_query(&self, keyword: &str) -> Box<dyn Query> {
         let (mut must, mut mustnot) = (Vec::new(), Vec::new());
-        for key in keyword.split(" ") {
+        for key in keyword.split(DELIMITER) {
             if key.starts_with("-") {
                 mustnot.push(&key[1..])
             } else {

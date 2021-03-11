@@ -11,6 +11,8 @@ mod search;
 use search::QuerySchema;
 mod migrate;
 
+static DEFAULT_MAX_SIZE: usize = 8;
+
 #[derive(Serialize)]
 struct Hit {
     url: Value,
@@ -49,7 +51,7 @@ fn execute(pages: &str, terms: &str, q: &str, range: &str, query_schema: QuerySc
     let (top_docs, num) = searcher
         .search(&bool_qs, &(query_schema.make_paginate(pages), Count))
         .unwrap();
-    let mut results: Vec<Hit> = Vec::with_capacity(10);
+    let mut results: Vec<Hit> = Vec::with_capacity(DEFAULT_MAX_SIZE);
     for (_score, doc_addr) in top_docs {
         let doc = searcher.doc(doc_addr).unwrap();
         let values = doc.get_sorted_field_values();

@@ -1,0 +1,15 @@
+[package]
+name = "search_api"
+version = "0.1.0"
+authors = ["WincerChan <WincerChan@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tantivy = "0.14.0"
+cang-jie = { git = "https://github.com/diem-fork/cang-jie", branch = "dev" }
+jieba-rs = "0.6.2"
+toml = "0.5"

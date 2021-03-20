@@ -6,9 +6,7 @@ use tantivy::{
     Document, Index, IndexReader, SnippetGenerator,
 };
 
-use cang_jie::{CangJieTokenizer, TokenizerOption, CANG_JIE};
-use jieba_rs::Jieba;
-use std::{sync::Arc, vec};
+use std::vec;
 
 use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
 
@@ -83,7 +81,7 @@ impl QuerySchema {
             title = Box::new(PhraseQuery::new_with_offset(title_terms));
             content = Box::new(PhraseQuery::new_with_offset(cnt_terms));
         }
-        Box::new(BooleanQuery::new(vec![(op, content)]))
+        Box::new(BooleanQuery::new(vec![(op, content), (op, title)]))
     }
 
     fn make_subqueries(&self, words: Vec<&str>) -> Vec<(Occur, Box<dyn Query>)> {
@@ -123,7 +121,6 @@ impl QuerySchema {
         let mustnot = self.make_subqueries(mustnot);
 
         querys.push((Occur::MustNot, Box::new(BooleanQuery::new(mustnot))));
-        println!("{:#?}", querys);
         Box::new(BooleanQuery::new(querys))
         // let s = self.query_parser.parse_query(keyword).unwrap();
         // println!("{:#?}", s);

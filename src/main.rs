@@ -10,6 +10,7 @@ mod config;
 mod search;
 use search::QuerySchema;
 mod migrate;
+mod tokenizer;
 
 static DEFAULT_MAX_SIZE: usize = 8;
 

@@ -1,7 +1,7 @@
 use collector::TopDocs;
 use tantivy::{
     collector,
-    query::{BooleanQuery, Occur, Query, QueryParser, RangeQuery, TermQuery},
+    query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
     schema::{Field, IndexRecordOption, Schema, Term, Value},
     Document, Index, IndexReader, SnippetGenerator,
 };
@@ -9,6 +9,8 @@ use tantivy::{
 use cang_jie::{CangJieTokenizer, TokenizerOption, CANG_JIE};
 use jieba_rs::Jieba;
 use std::{sync::Arc, vec};
+
+use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
 
 #[derive(Clone)]
 pub struct Fields {
@@ -28,15 +30,11 @@ pub struct QuerySchema {
     pub schema: Schema,
     pub query_parser: QueryParser,
     pub reader: IndexReader,
-    worker: Arc<Jieba>,
 }
 
 impl QuerySchema {
-    pub fn tokenizer() -> CangJieTokenizer {
-        CangJieTokenizer {
-            worker: Arc::new(Jieba::new()),
-            option: TokenizerOption::ForSearch { hmm: false },
-        }
+    pub fn tokenizer() -> UTF8Tokenizer {
+        UTF8Tokenizer {}
     }
     pub fn make_terms_query(
         &self,
@@ -61,29 +59,54 @@ impl QuerySchema {
     }
 
     fn make_field_search(&self, word: &str, op: Occur) -> Box<dyn Query> {
-        let t = Box::new(TermQuery::new(
-            Term::from_field_text(self.fields.title, word),
-            IndexRecordOption::WithFreqsAndPositions,
-        ));
-        let c = Box::new(TermQuery::new(
-            Term::from_field_text(self.fields.content, word),
-            IndexRecordOption::WithFreqsAndPositions,
-        ));
-        Box::new(BooleanQuery::new(vec![(op, t), (op, c)]))
+        let chs = cut_string(word);
+        let title: Box<dyn Query>;
+        let content: Box<dyn Query>;
+        if chs.len() == 1 {
+            title = Box::new(TermQuery::new(
+                Term::from_field_text(self.fields.title, word),
+                IndexRecordOption::WithFreqsAndPositions,
+            ));
+            content = Box::new(TermQuery::new(
+                Term::from_field_text(self.fields.content, word),
+                IndexRecordOption::WithFreqsAndPositions,
+            ));
+        } else {
+            let mut title_terms: Vec<(usize, Term)> = Vec::with_capacity(chs.len());
+            let mut cnt_terms: Vec<(usize, Term)> = Vec::with_capacity(chs.len());
+            let mut offset = 0;
+            for ch in chs {
+                title_terms.push((offset, Term::from_field_text(self.fields.title, ch)));
+                cnt_terms.push((offset, Term::from_field_text(self.fields.content, ch)));
+                offset += ch.len();
+            }
+            title = Box::new(PhraseQuery::new_with_offset(title_terms));
+            content = Box::new(PhraseQuery::new_with_offset(cnt_terms));
+        }
+        Box::new(BooleanQuery::new(vec![(op, content)]))
     }
 
     fn make_subqueries(&self, words: Vec<&str>) -> Vec<(Occur, Box<dyn Query>)> {
-        self.worker
-            .cut(&words.join(" "), false)
+        words
             .into_iter()
-            .filter(|x| x != &" ")
-            .map(|x| {
+            .map(|word| {
                 (
                     Occur::Must,
-                    self.make_field_search(&x.to_lowercase(), Occur::Should),
+                    self.make_field_search(&word.to_lowercase(), Occur::Should),
                 )
             })
             .collect()
+
+        // cut_string(&words.join(" "))
+        //     .into_iter()
+        //     .filter(|x| x != &" ")
+        //     .map(|x| {
+        //         (
+        //             Occur::Must,
+        //             self.make_field_search(&x.to_lowercase(), Occur::Should),
+        //         )
+        //     })
+        //     .collect()
     }
 
     pub fn make_keyword_query(&self, keyword: &str) -> Box<dyn Query> {
@@ -100,7 +123,11 @@ impl QuerySchema {
         let mustnot = self.make_subqueries(mustnot);
 
         querys.push((Occur::MustNot, Box::new(BooleanQuery::new(mustnot))));
+        println!("{:#?}", querys);
         Box::new(BooleanQuery::new(querys))
+        // let s = self.query_parser.parse_query(keyword).unwrap();
+        // println!("{:#?}", s);
+        // s
     }
 
     pub fn make_date_query(
@@ -175,13 +202,12 @@ impl QuerySchema {
         let index = Index::open_in_dir(path).unwrap();
         let schema = index.schema();
         let token = Self::tokenizer();
-        index.tokenizers().register(CANG_JIE, token.clone());
+        index.tokenizers().register("UTF-8", token.clone());
         let title = schema.get_field("title").unwrap();
         let content = schema.get_field("content").unwrap();
         let mut query_parser = QueryParser::for_index(&index, vec![title, content]);
         query_parser.set_conjunction_by_default();
         Self {
-            worker: token.worker,
             fields: Fields {
                 url: schema.get_field("url").unwrap(),
                 tags: schema.get_field("tags").unwrap(),

@@ -5,7 +5,7 @@ use super::tokenstream::UTF8TokenStream;
 #[derive(Clone)]
 pub struct UTF8Tokenizer;
 
-pub fn cut_string<'a>(text: &'a str) -> Vec<&'a str> {
+pub fn cut_string(text: &str) -> Vec<&str> {
     let mut char_offset = 0usize;
     let mut byte_offset = 0usize;
     let words: Vec<char> = text.chars().collect();

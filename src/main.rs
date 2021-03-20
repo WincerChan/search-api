@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::{env, fs, path::Path};
-use tantivy::{collector::Count, query::Query, schema::Value, SnippetGenerator};
+use tantivy::collector::Count;
 
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader, LineWriter};
@@ -16,8 +16,8 @@ static DEFAULT_MAX_SIZE: usize = 8;
 
 #[derive(Serialize)]
 struct Hit {
-    url: Value,
-    date: Value,
+    url: String,
+    date: i64,
     title: String,
     snippet: String,
 }
@@ -33,34 +33,35 @@ struct Response {
     data: Vec<Hit>,
 }
 
-fn execute(pages: &str, terms: &str, q: &str, range: &str, query_schema: QuerySchema) -> String {
-    let mut content_gen: Option<SnippetGenerator> = None;
-    let mut title_gen: Option<SnippetGenerator> = None;
-    let mut box_qs: Vec<Box<dyn Query>> = if q == "" {
-        Vec::new()
-    } else {
-        let kq = query_schema.make_keyword_query(q);
-        content_gen = query_schema.make_snippet_gen(kq.box_clone(), query_schema.fields.content);
-        title_gen = query_schema.make_snippet_gen(kq.box_clone(), query_schema.fields.title);
-        vec![kq]
-    };
-    box_qs = query_schema.make_terms_query(terms, box_qs);
-    box_qs = query_schema.make_date_query(range, box_qs);
+fn execute(pages: &str, terms: &str, q: &str, range: &str, query_schema: &QuerySchema) -> String {
+    let kq = query_schema.make_keyword_query(q);
+    if kq.is_err() {
+        return format!("{{\"err_msg\": \"{}\"}}\n", kq.unwrap_err().to_string());
+    }
+    let mut box_qs = kq.unwrap();
+    query_schema.make_terms_query(terms, &mut box_qs);
+    query_schema.make_date_query(range, &mut box_qs);
+    if box_qs.len() == 0 {
+        return format!("{{\"err_msg\": \"It is forbidden queries that are empty.\"}}\n");
+    }
+    let content_gen = query_schema.make_snippet_gen(&box_qs[0], query_schema.fields.content);
+    let title_gen = query_schema.make_snippet_gen(&box_qs[0], query_schema.fields.title);
+
     let bool_qs = query_schema.make_bool_query(box_qs);
     let searcher = query_schema.reader.searcher();
 
     let (top_docs, num) = searcher
         .search(&bool_qs, &(query_schema.make_paginate(pages), Count))
-        .unwrap();
+        .expect("Search Failed");
     let mut results: Vec<Hit> = Vec::with_capacity(DEFAULT_MAX_SIZE);
     for (_score, doc_addr) in top_docs {
-        let doc = searcher.doc(doc_addr).unwrap();
+        let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
         let values = doc.get_sorted_field_values();
         let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
         let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
         results.push(Hit {
-            url: values[3].1[0].value().clone(),
-            date: values[2].1[0].value().clone(),
+            url: values[3].1[0].value().text().expect("Err Url").to_string(),
+            date: values[2].1[0].value().i64_value().expect("Err date"),
             title,
             snippet,
         });
@@ -69,22 +70,25 @@ fn execute(pages: &str, terms: &str, q: &str, range: &str, query_schema: QuerySc
         count: num,
         data: results,
     });
-    se_result.to_string()
+    se_result.to_string() + "\n"
 }
+
 fn handle_client(stream: UnixStream, qs: QuerySchema) {
-    // println!("new client");
+    println!("new client: {:?}", stream);
     let stream_reader = BufReader::new(&stream);
     let mut stream_writer = LineWriter::new(&stream);
     for line in stream_reader.lines() {
-        let params = line.unwrap().clone();
+        let params = line.expect("error read from stream");
         let v: Vec<&str> = params.split(0 as char).collect();
-        let mut result = execute(v[0], v[1], v[2], v[3], qs.clone());
-        result.push('\n');
-        match stream_writer.write_all(result.as_bytes()) {
-            Ok(_) => (),
-            Err(err) => println!("{:?}", err),
+        {
+            let result = execute(v[0], v[1], v[2], v[3], &qs);
+            match stream_writer.write_all(result.as_bytes()) {
+                Ok(_) => (),
+                Err(err) => println!("{:?}", err),
+            };
         }
     }
+    println!("closed connection. {:?}", stream);
 }
 
 fn loop_accept(socket_path: &str, qs: QuerySchema) {
@@ -92,7 +96,7 @@ fn loop_accept(socket_path: &str, qs: QuerySchema) {
         fs::remove_file(socket_path).unwrap();
     }
     println!("Listening on file {:}", socket_path);
-    let listener = UnixListener::bind(socket_path).unwrap();
+    let listener = UnixListener::bind(socket_path).expect("Binding to file error");
     for stream in listener.incoming() {
         let tmp = qs.clone();
         match stream {

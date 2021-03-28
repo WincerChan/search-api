@@ -38,23 +38,18 @@ impl QuerySchema {
         let mut q_vecs: Vec<(Occur, Box<dyn Query>)> = Vec::new();
         for term in terms.split(DELIMITER) {
             let p = term.splitn(2, ":").collect::<Vec<&str>>();
-            match p[0] {
-                "tags" => q_vecs.push((
-                    Occur::Must,
-                    Box::new(TermQuery::new(
-                        Term::from_field_text(self.fields.tags, &p[1].to_lowercase()),
-                        IndexRecordOption::Basic,
-                    )),
+            let field = match p[0] {
+                "tags" => self.fields.tags,
+                "category" => self.fields.category,
+                _ => continue,
+            };
+            q_vecs.push((
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_text(field, &p[1].trim().to_lowercase()),
+                    IndexRecordOption::Basic,
                 )),
-                "category" => q_vecs.push((
-                    Occur::Must,
-                    Box::new(TermQuery::new(
-                        Term::from_field_text(self.fields.category, &p[1]),
-                        IndexRecordOption::Basic,
-                    )),
-                )),
-                _ => (),
-            }
+            ))
         }
         if q_vecs.len() != 0 {
             box_qs.push(Box::new(BooleanQuery::new(q_vecs)))

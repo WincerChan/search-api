@@ -4,7 +4,6 @@ use tantivy::{
 };
 
 use crate::search::QuerySchema;
-use cang_jie::CANG_JIE;
 use serde_json::Value;
 use std::{fs, path::Path};
 
@@ -18,7 +17,7 @@ pub fn create_dir(path: &str) {
 pub fn init_schema(path: &str, source: &str) {
     let mut schema_builder = Schema::builder();
     let text_indeces = TextFieldIndexing::default()
-        .set_tokenizer(CANG_JIE)
+        .set_tokenizer("UTF-8")
         .set_index_option(IndexRecordOption::WithFreqsAndPositions);
     let text_options = TextOptions::default().set_indexing_options(text_indeces);
     schema_builder.add_text_field("title", text_options.clone() | STORED);
@@ -27,18 +26,17 @@ pub fn init_schema(path: &str, source: &str) {
     schema_builder.add_text_field("tags", TEXT);
     schema_builder.add_text_field("category", TEXT);
     schema_builder.add_text_field("url", TEXT | STORED);
-    let schema1 = schema_builder.build();
-    let s2 = schema1.clone();
-    let index = Index::create_in_dir(path, schema1).unwrap();
+    let schema = schema_builder.build();
+    let index = Index::create_in_dir(path, schema.clone()).unwrap();
     index
         .tokenizers()
-        .register(CANG_JIE, QuerySchema::tokenizer());
+        .register("UTF-8", QuerySchema::tokenizer());
 
     let contents = fs::read_to_string(source).expect("Can't Open the file.");
     let v: Value = serde_json::from_str(&contents).unwrap();
     let mut index_writer = index.writer(50_000_000).unwrap();
     for x in v.as_array().unwrap() {
-        let d = s2.parse_document(&x.to_string()).unwrap();
+        let d = schema.parse_document(&x.to_string()).unwrap();
         index_writer.add_document(d);
     }
     index_writer.commit().unwrap();

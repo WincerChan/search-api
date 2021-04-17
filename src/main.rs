@@ -1,14 +1,15 @@
+use ipc::encode_result;
 use serde::Serialize;
 use std::{env, fs, path::Path};
 use tantivy::collector::Count;
 
 use std::io::prelude::*;
-use std::io::{BufRead, BufReader, LineWriter};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::thread;
 mod config;
 mod search;
 use search::QuerySchema;
+mod ipc;
 mod migrate;
 mod tokenizer;
 
@@ -33,7 +34,13 @@ struct Response {
     data: Vec<Hit>,
 }
 
-fn execute(pages: &str, terms: &str, q: &str, range: &str, query_schema: &QuerySchema) -> String {
+fn execute(
+    pages: Vec<i64>,
+    range: Vec<i64>,
+    terms: Vec<String>,
+    q: Vec<String>,
+    query_schema: &QuerySchema,
+) -> String {
     let kq = query_schema.make_keyword_query(q);
     if kq.is_err() {
         return format!("{{\"err_msg\": \"{}\"}}\n", kq.unwrap_err().to_string());
@@ -70,22 +77,23 @@ fn execute(pages: &str, terms: &str, q: &str, range: &str, query_schema: &QueryS
         count: num,
         data: results,
     });
-    se_result.to_string() + "\n"
+    se_result.to_string()
 }
 
-fn handle_client(stream: UnixStream, qs: QuerySchema) {
+fn handle_client(stream: &mut UnixStream, qs: QuerySchema) {
     println!("new client: {:?}", stream);
-    let stream_reader = BufReader::new(&stream);
-    let mut stream_writer = LineWriter::new(&stream);
-    for line in stream_reader.lines() {
-        let params = line.expect("error read from stream");
-        let v: Vec<&str> = params.split(0 as char).collect();
-        {
-            let result = execute(v[0], v[1], v[2], v[3], &qs);
-            match stream_writer.write_all(result.as_bytes()) {
-                Ok(_) => (),
-                Err(err) => println!("{:?}", err),
-            };
+    loop {
+        let params: (Vec<i64>, Vec<i64>, Vec<String>, Vec<String>);
+        match ipc::extract_params(stream) {
+            Ok(p) => params = p,
+            Err(_) => break,
+        }
+        let (p, r, t, q) = params;
+        let result = execute(p, r, t, q, &qs);
+        let result = encode_result(result);
+        match stream.write_all(&result) {
+            Ok(_) => (),
+            _ => break,
         }
     }
     println!("closed connection. {:?}", stream);
@@ -100,8 +108,8 @@ fn loop_accept(socket_path: &str, qs: QuerySchema) {
     for stream in listener.incoming() {
         let tmp = qs.clone();
         match stream {
-            Ok(stream) => {
-                thread::spawn(move || handle_client(stream, tmp));
+            Ok(mut stream) => {
+                thread::spawn(move || handle_client(&mut stream, tmp));
             }
             Err(err) => {
                 println!("Error: {}", err);

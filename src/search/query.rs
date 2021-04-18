@@ -20,7 +20,7 @@ pub struct Fields {
     category: Field,
 }
 
-static DELIMITER: &str = ",";
+// static DELIMITER: &str = ",";
 
 #[derive(Clone)]
 pub struct QuerySchema {
@@ -34,9 +34,9 @@ impl QuerySchema {
     pub fn tokenizer() -> UTF8Tokenizer {
         UTF8Tokenizer {}
     }
-    pub fn make_terms_query(&self, terms: &str, box_qs: &mut Vec<Box<dyn Query>>) {
+    pub fn make_terms_query(&self, terms: Vec<String>, box_qs: &mut Vec<Box<dyn Query>>) {
         let mut q_vecs: Vec<(Occur, Box<dyn Query>)> = Vec::new();
-        for term in terms.split(DELIMITER) {
+        for term in terms {
             let p = term.splitn(2, ":").collect::<Vec<&str>>();
             let field = match p[0] {
                 "tags" => self.fields.tags,
@@ -84,12 +84,12 @@ impl QuerySchema {
         Box::new(BooleanQuery::new(vec![(op, content), (op, title)]))
     }
 
-    pub fn make_keyword_query(&self, keyword: &str) -> Result<Vec<Box<dyn Query>>, &str> {
+    pub fn make_keyword_query(&self, keyword: Vec<String>) -> Result<Vec<Box<dyn Query>>, &str> {
         let (mut must, mut mustnot) = (Vec::new(), Vec::new());
-        for mut key in keyword.split(DELIMITER) {
-            key = key.trim();
+        for key in keyword {
             if key.starts_with("-") {
-                mustnot.push(&key[1..])
+                let t = key[1..].to_string();
+                mustnot.push(t)
             } else if key != "" {
                 must.push(key)
             }
@@ -120,17 +120,13 @@ impl QuerySchema {
         Ok(vec![Box::new(BooleanQuery::new(querys))])
     }
 
-    pub fn make_date_query(&self, dates: &str, box_qs: &mut Vec<Box<dyn Query>>) {
-        if dates == "" {
+    pub fn make_date_query(&self, dates: Vec<i64>, box_qs: &mut Vec<Box<dyn Query>>) {
+        if dates.len() == 0 {
             return;
         }
-        let dts: Vec<i64> = dates
-            .split("~")
-            .map(|x| x.parse::<i64>().unwrap())
-            .collect();
         box_qs.push(Box::new(RangeQuery::new_i64(
             self.fields.date,
-            dts[0]..dts[1],
+            dates[0]..dates[1],
         )))
     }
     pub fn make_snippet_gen(
@@ -170,13 +166,9 @@ impl QuerySchema {
         }
     }
 
-    pub fn make_paginate(&self, pages: &str) -> TopDocs {
-        let pgs: Vec<usize> = pages
-            .split("-")
-            .map(|x| x.parse::<usize>().unwrap())
-            .collect();
-        let page = pgs[0];
-        let size = pgs[1];
+    pub fn make_paginate(&self, pages: Vec<i64>) -> TopDocs {
+        let page = pages[0] as usize;
+        let size = pages[1] as usize;
         TopDocs::with_limit(size).and_offset((page - 1) * size)
     }
 

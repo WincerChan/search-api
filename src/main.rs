@@ -1,10 +1,17 @@
+use config::read::Network;
 use ipc::encode_result;
 use serde::Serialize;
-use std::{env, fs, path::Path};
+use std::{
+    env,
+    fmt::Debug,
+    fs,
+    io::{Read, Write},
+    net::TcpListener,
+    path::Path,
+};
 use tantivy::collector::Count;
 
-use std::io::prelude::*;
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixListener;
 use std::thread;
 mod config;
 mod search;
@@ -80,7 +87,7 @@ fn execute(
     se_result.to_string()
 }
 
-fn handle_client(stream: &mut UnixStream, qs: QuerySchema) {
+fn handle_client<T: Write + Read + Debug>(stream: &mut T, qs: QuerySchema) {
     println!("new client: {:?}", stream);
     loop {
         let params: (Vec<i64>, Vec<i64>, Vec<String>, Vec<String>);
@@ -99,23 +106,41 @@ fn handle_client(stream: &mut UnixStream, qs: QuerySchema) {
     println!("closed connection. {:?}", stream);
 }
 
-fn loop_accept(socket_path: &str, qs: QuerySchema) {
-    if Path::new(socket_path).exists() {
-        fs::remove_file(socket_path).unwrap();
-    }
-    println!("Listening on file {:}", socket_path);
-    let listener = UnixListener::bind(socket_path).expect("Binding to file error");
-    for stream in listener.incoming() {
+fn loop_handle<S, L, E>(listener: L, qs: QuerySchema)
+where
+    S: Write + Read + Sync + Send + 'static + Debug,
+    L: IntoIterator<Item = Result<S, E>>,
+    E: Debug,
+{
+    for stream in listener.into_iter() {
         let tmp = qs.clone();
         match stream {
             Ok(mut stream) => {
                 thread::spawn(move || handle_client(&mut stream, tmp));
             }
             Err(err) => {
-                println!("Error: {}", err);
+                println!("Error: {:?}", err);
                 break;
             }
         }
+    }
+}
+
+fn socket_accept(socket: &Network, qs: QuerySchema) {
+    if Path::new(&socket.listen_addr).exists() {
+        fs::remove_file(&socket.listen_addr).unwrap();
+    }
+    println!("Listening on file {:}", socket.listen_addr);
+    match &socket.listen_type[0..] {
+        "uds" => {
+            let uds = UnixListener::bind(&socket.listen_addr).expect("Binding to file error");
+            loop_handle(&mut uds.incoming(), qs)
+        }
+        "tcp" => {
+            let tcp = TcpListener::bind(&socket.listen_addr).expect("Binding to port error");
+            loop_handle(&mut tcp.incoming(), qs)
+        }
+        _ => (),
     }
 }
 
@@ -133,15 +158,15 @@ fn main() {
     let config = config::read_config();
     match args[1].as_ref() {
         "init" => {
-            migrate::create_dir(&config.tantivy_db);
-            migrate::init_schema(&config.tantivy_db, &config.blog_source);
+            migrate::create_dir(&config.database.tantivy_db);
+            migrate::init_schema(&config.database.tantivy_db, &config.database.blog_source);
         }
         "migrate" => {
-            migrate::init_schema(&config.tantivy_db, &config.blog_source);
+            migrate::init_schema(&config.database.tantivy_db, &config.database.blog_source);
         }
         "run" => {
-            let qs = QuerySchema::new(&config.tantivy_db);
-            loop_accept(&config.listen_addr, qs);
+            let qs = QuerySchema::new(&config.database.tantivy_db);
+            socket_accept(&config.network, qs);
         }
         _ => (),
     }

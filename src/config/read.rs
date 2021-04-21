@@ -2,10 +2,21 @@ use serde::Deserialize;
 use std::{env, fs::read_to_string, path::Path, process::exit};
 
 #[derive(Deserialize)]
-pub struct Config {
+pub struct Database {
     pub blog_source: String,
     pub tantivy_db: String,
+}
+
+#[derive(Deserialize)]
+pub struct Network {
+    pub listen_type: String,
     pub listen_addr: String,
+}
+
+#[derive(Deserialize)]
+pub struct Config {
+    pub database: Database,
+    pub network: Network,
 }
 
 pub fn read_config() -> Config {

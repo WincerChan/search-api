@@ -1,10 +1,10 @@
-use std::{convert::TryInto, io::Read, os::unix::net::UnixStream};
+use std::{convert::TryInto, io::Read};
 
 static LENGTH_SIZE: usize = 4;
 static INTEGER_SIZE: usize = 8;
 static DATA_OFFSET: usize = 3; // 3 = 1 (delimeter) + 1 (basic or compound) + 1 (contains element type)
 
-fn extract_length(stream: &mut UnixStream) -> usize {
+fn extract_length<T: Read>(stream: &mut T) -> usize {
     let mut len_buf = vec![0; LENGTH_SIZE];
     stream.read(&mut len_buf).expect("err get length");
     u32::from_be_bytes(len_buf.try_into().expect("error to int")) as usize
@@ -60,8 +60,8 @@ fn extract_integer_list(raw_params: &[u8]) -> (Vec<i64>, &[u8]) {
     (integers, &raw_params[length + LENGTH_SIZE + offset..])
 }
 
-pub fn extract_params(
-    stream: &mut UnixStream,
+pub fn extract_params<T: Read>(
+    stream: &mut T,
 ) -> Result<(Vec<i64>, Vec<i64>, Vec<String>, Vec<String>), ()> {
     let length = extract_length(stream);
     if 0 == length {

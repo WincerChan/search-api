@@ -2,7 +2,7 @@ use std::{convert::TryInto, io::Read};
 
 static LENGTH_SIZE: usize = 4;
 static INTEGER_SIZE: usize = 8;
-static DATA_OFFSET: usize = 3; // 3 = 1 (delimeter) + 1 (basic or compound) + 1 (contains element type)
+static DATA_OFFSET: usize = 1; // 3 = 1 (delimeter) + 1 (basic or compound) + 1 (contains element type)
 
 fn extract_length<T: Read>(stream: &mut T) -> usize {
     let mut len_buf = vec![0; LENGTH_SIZE];

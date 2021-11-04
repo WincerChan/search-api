@@ -1,0 +1,6 @@
+[database]
+blog_source = './blogs.json'
+tantivy_db = './blog_db'
+[network]
+listen_type = 'tcp'
+listen_addr = '127.0.0.1:8834'

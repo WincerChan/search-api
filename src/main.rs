@@ -5,11 +5,12 @@ use std::{
     env,
     fmt::Debug,
     fs,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
     path::Path,
 };
 use tantivy::collector::Count;
+use tantivy::query::QueryParser;
 
 use std::os::unix::net::UnixListener;
 use std::thread;
@@ -63,13 +64,18 @@ fn execute(
 
     let bool_qs = query_schema.make_bool_query(box_qs);
     let searcher = query_schema.reader.searcher();
+    let query1 = query_schema
+        .query_parser
+        .parse_query("date:[2002-10-02T15:00:00Z TO 2022-10-02T18:00:00Z}")
+        .unwrap();
 
     let (top_docs, num) = searcher
-        .search(&bool_qs, &(query_schema.make_paginate(pages), Count))
+        .search(&query1, &(query_schema.make_paginate(pages), Count))
         .expect("Search Failed");
     let mut results: Vec<Hit> = Vec::with_capacity(DEFAULT_MAX_SIZE);
     for (_score, doc_addr) in top_docs {
         let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
+        println!("{:?}", doc);
         let values = doc.get_sorted_field_values();
         let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
         let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
@@ -126,6 +132,26 @@ where
     }
 }
 
+fn dev_accept(socket: &Network, qs: QuerySchema) {
+    let tcp = TcpListener::bind(&socket.listen_addr).expect("Bind to port error");
+    for stream in tcp.incoming().into_iter() {
+        let tmp = qs.clone();
+        match stream {
+            Ok(stream) => loop {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut resp = String::new();
+                reader.read_line(&mut resp).unwrap();
+                let result = execute(vec![1, 8], vec![0, 8], Vec::new(), Vec::new(), &qs);
+                println!("resp is : {:?} {:?}", resp, result);
+            },
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+}
+
 fn socket_accept(socket: &Network, qs: QuerySchema) {
     if Path::new(&socket.listen_addr).exists() {
         fs::remove_file(&socket.listen_addr).unwrap();
@@ -167,6 +193,10 @@ fn main() {
         "run" => {
             let qs = QuerySchema::new(&config.database.tantivy_db);
             socket_accept(&config.network, qs);
+        }
+        "dev" => {
+            let qs = QuerySchema::new(&config.database.tantivy_db);
+            dev_accept(&config.network, qs);
         }
         _ => (),
     }

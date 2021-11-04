@@ -22,7 +22,9 @@ pub fn init_schema(path: &str, source: &str) {
     let text_options = TextOptions::default().set_indexing_options(text_indeces);
     schema_builder.add_text_field("title", text_options.clone() | STORED);
     schema_builder.add_text_field("content", text_options.clone() | STORED);
-    schema_builder.add_i64_field("date", INDEXED | STORED);
+    // schema_builder.add_i64_field("date", INDEXED | STORED);
+    // make date file type to date
+    schema_builder.add_date_field("date", INDEXED | STORED);
     schema_builder.add_text_field("tags", TEXT);
     schema_builder.add_text_field("category", TEXT);
     schema_builder.add_text_field("url", TEXT | STORED);

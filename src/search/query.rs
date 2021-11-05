@@ -126,7 +126,7 @@ impl QuerySchema {
         if date_str == "" {
             return Bound::Unbounded;
         }
-        let t = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap();
+        let t = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Error parse date.");
         let d = Date::from_utc(t, Utc);
         let st = d.and_time(time).expect("Failed add time to date");
         Bound::Included(Term::from_field_date(self.fields.date, &st))

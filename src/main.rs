@@ -10,7 +10,6 @@ use std::{
     path::Path,
 };
 use tantivy::collector::Count;
-use tantivy::query::QueryParser;
 
 use std::os::unix::net::UnixListener;
 use std::thread;
@@ -71,7 +70,6 @@ fn execute(
     let mut results: Vec<Hit> = Vec::with_capacity(DEFAULT_MAX_SIZE);
     for (_score, doc_addr) in top_docs {
         let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
-        println!("{:?}", doc);
         let values = doc.get_sorted_field_values();
         let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
         let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
@@ -135,36 +133,44 @@ where
 fn dev_accept(socket: &Network, qs: QuerySchema) {
     let tcp = TcpListener::bind(&socket.listen_addr).expect("Bind to port error");
     for stream in tcp.incoming().into_iter() {
-        let tmp = qs.clone();
         match stream {
-            Ok(mut stream) => loop {
-                let mut reader = BufReader::new(stream.try_clone().unwrap());
-                let mut resp = String::new();
-                reader.read_line(&mut resp).unwrap();
-                let raw = resp.strip_suffix("\r\n").expect("failed ");
-                let args: Vec<&str> = raw.split(",").collect();
-                let result = execute(
-                    args[0]
-                        .split("-")
-                        .map(|s| s.parse().unwrap())
-                        .collect::<Vec<_>>(),
-                    args[1]
-                        .split("~")
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>(),
-                    args[2]
-                        .split(" ")
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>(),
-                    args[3]
-                        .split(" ")
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>(),
-                    &qs,
-                );
-                println!("resp is : {:?} {:?}", resp, result);
-                stream.write_all(&result.as_bytes()).expect("Failed send");
-            },
+            Ok(mut stream) => {
+                stream
+                    .write_all("Arguments: Page, Range, Tags, Keywords\r\n> ".as_bytes())
+                    .expect("Failed connect");
+                loop {
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut resp = String::new();
+                    reader.read_line(&mut resp).expect("Failed to read line.");
+                    let raw = resp.strip_suffix("\r\n").expect("failed ");
+                    let args: Vec<&str> = raw.split(",").collect();
+                    let mut result = "Invalid Arguments. ".to_owned();
+                    if args.len() == 4 {
+                        result = execute(
+                            args[0]
+                                .split("-")
+                                .map(|s| s.parse().unwrap())
+                                .collect::<Vec<_>>(),
+                            args[1]
+                                .split("~")
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>(),
+                            args[2]
+                                .split(" ")
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>(),
+                            args[3]
+                                .split(" ")
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>(),
+                            &qs,
+                        );
+                    }
+                    stream
+                        .write_all((result + "\r\n> ").as_bytes())
+                        .expect("Failed send");
+                }
+            }
             Err(err) => {
                 println!("Error: {:?}", err);
                 break;
@@ -198,7 +204,8 @@ fn main() {
             "Run with one argument: 
         1. init (Initial tanitvy schema and database. this will empty exists directory.)
         2. migrate (Append new article to exists directory.)
-        3. run (run server with unix domain socket.)"
+        3. run (run server with unix domain socket.)
+        4. dev (run server with tcp and accept raw args.)"
         );
         return;
     }

@@ -7,7 +7,7 @@ use tantivy::{
     Document, Index, IndexReader, SnippetGenerator,
 };
 
-use chrono;
+use chrono::{Date, NaiveDate, NaiveTime, Utc};
 use std::vec;
 
 use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
@@ -122,11 +122,14 @@ impl QuerySchema {
         Ok(vec![Box::new(BooleanQuery::new(querys))])
     }
 
-    fn transform_datetime(&self, date_str: &str) -> chrono::Date<chrono::Utc> {
-        let t = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap();
-        chrono::Date::from_utc(t, chrono::Utc)
-        // let nd = chrono::Date::from_utc(t, chrono::Utc).add_hms(0, 0, 0);
-        // return nd.with_timezone(&chrono::Utc);
+    fn transform_date_bound(&self, date_str: &str, time: chrono::NaiveTime) -> Bound<Term> {
+        if date_str == "" {
+            return Bound::Unbounded;
+        }
+        let t = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Error parse date.");
+        let d = Date::from_utc(t, Utc);
+        let st = d.and_time(time).expect("Failed add time to date");
+        Bound::Included(Term::from_field_date(self.fields.date, &st))
     }
 
     pub fn make_date_query(&self, dates: Vec<String>, box_qs: &mut Vec<Box<dyn Query>>) {
@@ -136,13 +139,11 @@ impl QuerySchema {
         // let x = chrono::DateTime::parse_from_rfc3339("2020-01-23").unwrap();
         // let t = chrono::NaiveDate::parse_from_str("2021-01-23", "%Y-%m-%d").unwrap();
         // let x: DateTime = chrono::Date::from_utc(t, chrono::Utc).and_hms(0, 0, 0);
-        let st = self.transform_datetime(&dates[0]).and_hms(0, 0, 0);
-        let ed = self.transform_datetime(&dates[1]).and_hms(23, 59, 59);
         box_qs.push(Box::new(RangeQuery::new_term_bounds(
             self.fields.date,
             Type::Date,
-            &Bound::Included(Term::from_field_date(self.fields.date, &st)),
-            &Bound::Included(Term::from_field_date(self.fields.date, &ed)),
+            &self.transform_date_bound(&dates[0], NaiveTime::from_hms(0, 0, 0)),
+            &self.transform_date_bound(&dates[1], NaiveTime::from_hms(23, 59, 59)),
         )))
     }
     pub fn make_snippet_gen(

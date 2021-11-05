@@ -137,12 +137,33 @@ fn dev_accept(socket: &Network, qs: QuerySchema) {
     for stream in tcp.incoming().into_iter() {
         let tmp = qs.clone();
         match stream {
-            Ok(stream) => loop {
+            Ok(mut stream) => loop {
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut resp = String::new();
                 reader.read_line(&mut resp).unwrap();
-                let result = execute(vec![1, 8], vec![0, 8], Vec::new(), Vec::new(), &qs);
+                let raw = resp.strip_suffix("\r\n").expect("failed ");
+                let args: Vec<&str> = raw.split(",").collect();
+                let result = execute(
+                    args[0]
+                        .split("-")
+                        .map(|s| s.parse().unwrap())
+                        .collect::<Vec<_>>(),
+                    args[1]
+                        .split("~")
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>(),
+                    args[2]
+                        .split(" ")
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>(),
+                    args[3]
+                        .split(" ")
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>(),
+                    &qs,
+                );
                 println!("resp is : {:?} {:?}", resp, result);
+                stream.write_all(&result.as_bytes()).expect("Failed send");
             },
             Err(err) => {
                 println!("Error: {:?}", err);

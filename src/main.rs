@@ -26,7 +26,7 @@ static DEFAULT_MAX_SIZE: usize = 8;
 #[derive(Serialize)]
 struct Hit {
     url: String,
-    date: i64,
+    date: String,
     title: String,
     snippet: String,
 }
@@ -44,7 +44,7 @@ struct Response {
 
 fn execute(
     pages: Vec<i64>,
-    range: Vec<i64>,
+    range: Vec<String>,
     terms: Vec<String>,
     q: Vec<String>,
     query_schema: &QuerySchema,
@@ -64,13 +64,9 @@ fn execute(
 
     let bool_qs = query_schema.make_bool_query(box_qs);
     let searcher = query_schema.reader.searcher();
-    let query1 = query_schema
-        .query_parser
-        .parse_query("date:[2002-10-02T15:00:00Z TO 2022-10-02T18:00:00Z}")
-        .unwrap();
 
     let (top_docs, num) = searcher
-        .search(&query1, &(query_schema.make_paginate(pages), Count))
+        .search(&bool_qs, &(query_schema.make_paginate(pages), Count))
         .expect("Search Failed");
     let mut results: Vec<Hit> = Vec::with_capacity(DEFAULT_MAX_SIZE);
     for (_score, doc_addr) in top_docs {
@@ -81,7 +77,11 @@ fn execute(
         let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
         results.push(Hit {
             url: values[3].1[0].value().text().expect("Err Url").to_string(),
-            date: values[2].1[0].value().i64_value().expect("Err date"),
+            date: values[2].1[0]
+                .value()
+                .date_value()
+                .expect("Err date")
+                .to_rfc3339(),
             title,
             snippet,
         });
@@ -96,7 +96,7 @@ fn execute(
 fn handle_client<T: Write + Read + Debug>(stream: &mut T, qs: QuerySchema) {
     println!("new client: {:?}", stream);
     loop {
-        let params: (Vec<i64>, Vec<i64>, Vec<String>, Vec<String>);
+        let params: (Vec<i64>, Vec<String>, Vec<String>, Vec<String>);
         match ipc::extract_params(stream) {
             Ok(p) => params = p,
             Err(_) => break,

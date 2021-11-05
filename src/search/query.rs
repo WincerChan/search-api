@@ -1,11 +1,13 @@
 use collector::TopDocs;
+use std::ops::Bound;
 use tantivy::{
     collector,
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
-    schema::{Field, IndexRecordOption, Schema, Term, Value},
+    schema::{Field, IndexRecordOption, Schema, Term, Type, Value},
     Document, Index, IndexReader, SnippetGenerator,
 };
 
+use chrono;
 use std::vec;
 
 use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
@@ -120,13 +122,27 @@ impl QuerySchema {
         Ok(vec![Box::new(BooleanQuery::new(querys))])
     }
 
-    pub fn make_date_query(&self, dates: Vec<i64>, box_qs: &mut Vec<Box<dyn Query>>) {
+    fn transform_datetime(&self, date_str: &str) -> chrono::Date<chrono::Utc> {
+        let t = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap();
+        chrono::Date::from_utc(t, chrono::Utc)
+        // let nd = chrono::Date::from_utc(t, chrono::Utc).add_hms(0, 0, 0);
+        // return nd.with_timezone(&chrono::Utc);
+    }
+
+    pub fn make_date_query(&self, dates: Vec<String>, box_qs: &mut Vec<Box<dyn Query>>) {
         if dates.len() == 0 {
             return;
         }
-        box_qs.push(Box::new(RangeQuery::new_i64(
+        // let x = chrono::DateTime::parse_from_rfc3339("2020-01-23").unwrap();
+        // let t = chrono::NaiveDate::parse_from_str("2021-01-23", "%Y-%m-%d").unwrap();
+        // let x: DateTime = chrono::Date::from_utc(t, chrono::Utc).and_hms(0, 0, 0);
+        let st = self.transform_datetime(&dates[0]).and_hms(0, 0, 0);
+        let ed = self.transform_datetime(&dates[1]).and_hms(23, 59, 59);
+        box_qs.push(Box::new(RangeQuery::new_term_bounds(
             self.fields.date,
-            dates[0]..dates[1],
+            Type::Date,
+            &Bound::Included(Term::from_field_date(self.fields.date, &st)),
+            &Bound::Included(Term::from_field_date(self.fields.date, &ed)),
         )))
     }
     pub fn make_snippet_gen(

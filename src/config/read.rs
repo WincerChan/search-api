@@ -3,7 +3,7 @@ use std::{env, fs::read_to_string, path::Path, process::exit};
 
 #[derive(Deserialize)]
 pub struct Database {
-    pub blog_source: String,
+    pub atom_url: String,
     pub tantivy_db: String,
 }
 

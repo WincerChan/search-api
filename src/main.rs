@@ -5,7 +5,7 @@ use std::{
     env,
     fmt::Debug,
     fs,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
     path::Path,
 };
@@ -25,7 +25,7 @@ static DEFAULT_MAX_SIZE: usize = 8;
 #[derive(Serialize)]
 struct Hit {
     url: String,
-    date: i64,
+    date: String,
     title: String,
     snippet: String,
 }
@@ -43,7 +43,7 @@ struct Response {
 
 fn execute(
     pages: Vec<i64>,
-    range: Vec<i64>,
+    range: Vec<String>,
     terms: Vec<String>,
     q: Vec<String>,
     query_schema: &QuerySchema,
@@ -73,9 +73,14 @@ fn execute(
         let values = doc.get_sorted_field_values();
         let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
         let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
+        println!("{:?}", values);
         results.push(Hit {
             url: values[3].1[0].value().text().expect("Err Url").to_string(),
-            date: values[2].1[0].value().i64_value().expect("Err date"),
+            date: values[2].1[0]
+                .value()
+                .date_value()
+                .expect("Err date")
+                .to_rfc3339(),
             title,
             snippet,
         });
@@ -90,7 +95,7 @@ fn execute(
 fn handle_client<T: Write + Read + Debug>(stream: &mut T, qs: QuerySchema) {
     println!("new client: {:?}", stream);
     loop {
-        let params: (Vec<i64>, Vec<i64>, Vec<String>, Vec<String>);
+        let params: (Vec<i64>, Vec<String>, Vec<String>, Vec<String>);
         match ipc::extract_params(stream) {
             Ok(p) => params = p,
             Err(_) => break,
@@ -126,6 +131,55 @@ where
     }
 }
 
+fn dev_accept(socket: &Network, qs: QuerySchema) {
+    let tcp = TcpListener::bind(&socket.listen_addr).expect("Bind to port error");
+    for stream in tcp.incoming().into_iter() {
+        match stream {
+            Ok(mut stream) => {
+                stream
+                    .write_all("Arguments: Page, Range, Tags, Keywords\r\n> ".as_bytes())
+                    .expect("Failed connect");
+                loop {
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut resp = String::new();
+                    reader.read_line(&mut resp).expect("Failed to read line.");
+                    let raw = resp.strip_suffix("\r\n").expect("failed ");
+                    let args: Vec<&str> = raw.split(",").collect();
+                    let mut result = "Invalid Arguments. ".to_owned();
+                    if args.len() == 4 {
+                        result = execute(
+                            args[0]
+                                .split("-")
+                                .map(|s| s.parse().unwrap())
+                                .collect::<Vec<_>>(),
+                            args[1]
+                                .split("~")
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>(),
+                            args[2]
+                                .split(" ")
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>(),
+                            args[3]
+                                .split(" ")
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>(),
+                            &qs,
+                        );
+                    }
+                    stream
+                        .write_all((result + "\r\n> ").as_bytes())
+                        .expect("Failed send");
+                }
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+}
+
 fn socket_accept(socket: &Network, qs: QuerySchema) {
     if Path::new(&socket.listen_addr).exists() {
         fs::remove_file(&socket.listen_addr).unwrap();
@@ -151,7 +205,8 @@ fn main() {
             "Run with one argument: 
         1. init (Initial tanitvy schema and database. this will empty exists directory.)
         2. migrate (Append new article to exists directory.)
-        3. run (run server with unix domain socket.)"
+        3. run (run server with unix domain socket.)
+        4. dev (run server with tcp and accept raw args.)"
         );
         return;
     }
@@ -159,14 +214,18 @@ fn main() {
     match args[1].as_ref() {
         "init" => {
             migrate::create_dir(&config.database.tantivy_db);
-            migrate::init_schema(&config.database.tantivy_db, &config.database.blog_source);
+            migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
         }
         "migrate" => {
-            migrate::init_schema(&config.database.tantivy_db, &config.database.blog_source);
+            migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
         }
         "run" => {
             let qs = QuerySchema::new(&config.database.tantivy_db);
             socket_accept(&config.network, qs);
+        }
+        "dev" => {
+            let qs = QuerySchema::new(&config.database.tantivy_db);
+            dev_accept(&config.network, qs);
         }
         _ => (),
     }

@@ -1,11 +1,13 @@
 use collector::TopDocs;
+use std::ops::Bound;
 use tantivy::{
     collector,
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
-    schema::{Field, IndexRecordOption, Schema, Term, Value},
+    schema::{Field, IndexRecordOption, Schema, Term, Type, Value},
     Document, Index, IndexReader, SnippetGenerator,
 };
 
+use chrono::{Date, NaiveDate, NaiveTime, Utc};
 use std::vec;
 
 use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
@@ -120,13 +122,31 @@ impl QuerySchema {
         Ok(vec![Box::new(BooleanQuery::new(querys))])
     }
 
-    pub fn make_date_query(&self, dates: Vec<i64>, box_qs: &mut Vec<Box<dyn Query>>) {
+    fn transform_date_bound(&self, date_str: &str, time: chrono::NaiveTime) -> Bound<Term> {
+        if date_str == "" {
+            return Bound::Unbounded;
+        }
+        let t = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Error parse date.");
+        let d = Date::from_utc(t, Utc);
+        let st = d.and_time(time).expect("Failed add time to date");
+        Bound::Included(Term::from_field_date(self.fields.date, &st))
+    }
+
+    pub fn make_date_query(&self, dates: Vec<String>, box_qs: &mut Vec<Box<dyn Query>>) {
         if dates.len() == 0 {
             return;
         }
-        box_qs.push(Box::new(RangeQuery::new_i64(
+        if dates[0] == "" {
+            return;
+        }
+        // let x = chrono::DateTime::parse_from_rfc3339("2020-01-23").unwrap();
+        // let t = chrono::NaiveDate::parse_from_str("2021-01-23", "%Y-%m-%d").unwrap();
+        // let x: DateTime = chrono::Date::from_utc(t, chrono::Utc).and_hms(0, 0, 0);
+        box_qs.push(Box::new(RangeQuery::new_term_bounds(
             self.fields.date,
-            dates[0]..dates[1],
+            Type::Date,
+            &self.transform_date_bound(&dates[0], NaiveTime::from_hms(0, 0, 0)),
+            &self.transform_date_bound(&dates[1], NaiveTime::from_hms(23, 59, 59)),
         )))
     }
     pub fn make_snippet_gen(

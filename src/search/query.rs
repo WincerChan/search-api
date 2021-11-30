@@ -136,6 +136,9 @@ impl QuerySchema {
         if dates.len() == 0 {
             return;
         }
+        if dates[0] == "" {
+            return;
+        }
         // let x = chrono::DateTime::parse_from_rfc3339("2020-01-23").unwrap();
         // let t = chrono::NaiveDate::parse_from_str("2021-01-23", "%Y-%m-%d").unwrap();
         // let x: DateTime = chrono::Date::from_utc(t, chrono::Utc).and_hms(0, 0, 0);

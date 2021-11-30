@@ -73,6 +73,7 @@ fn execute(
         let values = doc.get_sorted_field_values();
         let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
         let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
+        println!("{:?}", values);
         results.push(Hit {
             url: values[3].1[0].value().text().expect("Err Url").to_string(),
             date: values[2].1[0]
@@ -213,10 +214,10 @@ fn main() {
     match args[1].as_ref() {
         "init" => {
             migrate::create_dir(&config.database.tantivy_db);
-            migrate::init_schema(&config.database.tantivy_db, &config.database.blog_source);
+            migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
         }
         "migrate" => {
-            migrate::init_schema(&config.database.tantivy_db, &config.database.blog_source);
+            migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
         }
         "run" => {
             let qs = QuerySchema::new(&config.database.tantivy_db);

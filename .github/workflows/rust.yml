@@ -24,15 +24,19 @@ jobs:
       - name: Download Latest Deps
         run: cargo fetch
       - name: Build Linux Deps
-        run: cargo build --release
-      - name: Rename Target
-        run: mv target/release/search_api search-api-linux-amd64
-      - name: Cache Deps and Target
+        run: |
+          cargo build --release
+          mv target/release/search_api search-api-linux-amd64
+      - name: Cache Build Target
         uses: actions/cache@v2
-        id: cache
         with:
           path: search-api-linux-amd64
-          key: search-api-${{ hashFiles('search-api-linux-amd64') }}
+          key: search-api-${{ github.sha }}
+      - name: Cache Cargo Deps
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/registry
+          key: cargo-deps-${{ hashFiles('Cargo.lock') }}
 
   checkout-macos:
     runs-on: macos-10.15
@@ -40,13 +44,17 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Check out latest
-      run: cargo build --release
+      run: cargo build --release --offline
+    - name: Get Linux Cache
+      uses: actions/cache@v2
+      with:
+        path: search-api-linux-amd64
+        key: search-api-${{ github.ref }}
     - name: Rename macOS target
       run: |
         cp target/release/search_api search-api-darwin-amd64
         ls -la
-    - name: Test in FreeBSD
-      id: test
+    - name: Build in FreeBSD
       if: startsWith(github.ref, 'refs/tags/v')
       uses: vmactions/freebsd-vm@v0.1.5
       with:
@@ -59,7 +67,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/v')
       with:
-        body: Test Release Use Actions
+        body_path: RELEASE.md
         files: |
           search-api-freebsd-amd64
           search-api-darwin-amd64

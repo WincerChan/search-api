@@ -1025,6 +1025,8 @@ dependencies = [
 [[package]]
 name = "tantivy"
 version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25e733d58e88c51fb0ed76305885ce617a49731e3476514cf7ad4394668dfbc7"
 dependencies = [
  "base64",
  "bitpacking",

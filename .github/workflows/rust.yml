@@ -27,12 +27,16 @@ jobs:
         with:
           path: ~/.cargo/registry
           key: cargo-deps-${{ hashFiles('Cargo.lock') }}
+      - name: Retrieve Sha1sum
+        id: linux-hash
+        run: |
+          echo "::set-output name=sha1sum::$(tar cf - src/ | sha1sum  |  tr -d '[:space:]-')"
       - name: Cache Build Target(Linux)
         id: linux-cache
         uses: actions/cache@v2
         with:
           path: search-api-linux-amd64
-          key: search-api-$(tar cf - openresty-1.19.3.1/ | sha1sum  |  tr -d "[:space:]-")
+          key: search-api-${{ steps.linux-hash.outputs.sha1sum }}
       - name: Download Latest Deps
         if: steps.linux-deps.outputs.cache-hit != 'true'
         run: cargo fetch
@@ -53,11 +57,15 @@ jobs:
       with:
         path: ~/.cargo/registry
         key: cargo-deps-${{ hashFiles('Cargo.lock') }}
+    - name: Retrieve Sha1sum
+      id: linux-hash
+      run: |
+        echo "::set-output name=sha1sum::$(tar cf - src/ | sha1sum  |  tr -d '[:space:]-')"
     - name: Get Linux Target
       uses: actions/cache@v2
       with:
         path: search-api-linux-amd64
-        key: search-api-$(tar cf - openresty-1.19.3.1/ | sha1sum  |  tr -d "[:space:]-")
+        key: search-api-${{ steps.linux-hash.outputs.sha1sum }}
     - name: Cache Build Target(MacOS)
       id: macos-cache
       uses: actions/cache@v2

@@ -39,6 +39,7 @@ jobs:
           key: cargo-deps-${{ hashFiles('Cargo.lock') }}
 
   checkout-macos:
+    needs: checkout-linux
     runs-on: macos-10.15
     name: Checkout MacOS
     steps:

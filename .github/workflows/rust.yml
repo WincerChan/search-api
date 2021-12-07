@@ -17,9 +17,19 @@ jobs:
     - uses: actions/checkout@v2
     - name: Test in FreeBSD
       id: test
+      if: startsWith(github.ref, 'refs/tags/')
       uses: vmactions/freebsd-vm@v0.1.5
       with:
         mem: 2048
         prepare: pkg install -y rust
         run: |
-          ls -la
+          cargo build --release
+          cp target/release/search_api search-api-amd64-freebsd13
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        body: Test Release Use Actions
+        prerelease: true
+        files: search-api-amd64-freebsd13
+          

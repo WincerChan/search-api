@@ -64,12 +64,13 @@ jobs:
         key: search-api-linux-${{ steps.linux-hash.outputs.sha1sum }}
     - name: Cache Build Target(MacOS)
       id: macos-cache
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/cache@v2
       with:
         path: search-api-darwin-amd64
-        key: search-api-darwin-${{ steps.linux-hash.outputs.sha1sum }}
+        key: search-api-darwin-${{ github.sha }}
     - name: Build MacOS Target
-      if: steps.macos-cache.outputs.cache-hit != 'true'
+      if: startsWith(github.ref, 'refs/tags/v') && steps.macos-cache.outputs.cache-hit != 'true'
       run: |
         cargo build --release --offline
         cp target/release/search_api search-api-darwin-amd64

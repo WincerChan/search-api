@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - test_ci
     tags:
       - "v*.*.*"
   pull_request:
@@ -14,26 +15,54 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  checkout-linux:
+    name: Checkout Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Latest Source Code
+        uses: actions/checkout@v2
+      - name: Download Latest Deps
+        run: cargo fetch
+      - name: Build Linux Deps
+        run: cargo build --release
+      - name: Rename Target
+        run: mv target/release/search_api search-api-linux-amd64
+      - name: Cache Deps and Target
+        uses: actions/cache@v2
+        id: cache
+        with:
+          path: search-api-linux-amd64
+          key: search-api-${{ hashFiles('search-api-linux-amd64') }}
+
+  checkout-macos:
     runs-on: macos-10.15
-    name: A job to run test FreeBSD
+    name: Checkout MacOS
     steps:
     - uses: actions/checkout@v2
+    - name: Check out latest
+      run: cargo build --release
+    - name: Rename macOS target
+      run: |
+        cp target/release/search_api search-api-darwin-amd64
+        ls -la
     - name: Test in FreeBSD
       id: test
       if: startsWith(github.ref, 'refs/tags/v')
       uses: vmactions/freebsd-vm@v0.1.5
       with:
-        mem: 2048
+        mem: 8192
         prepare: pkg install -y rust
         run: |
           cargo build --release
-          cp target/release/search_api search-api-amd64-freebsd13
+          cp target/release/search_api search-api-freebsd-amd64
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/v')
       with:
         body: Test Release Use Actions
-        prerelease: true
-        files: search-api-amd64-freebsd13
-          
+        files: |
+          search-api-freebsd-amd64
+          search-api-darwin-amd64
+          search-api-linux-amd64
+
+

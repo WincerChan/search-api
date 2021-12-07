@@ -57,10 +57,6 @@ jobs:
       with:
         path: ~/.cargo/registry
         key: cargo-deps-${{ hashFiles('Cargo.lock') }}
-    - name: Retrieve Sha1sum
-      id: linux-hash
-      run: |
-        echo "::set-output name=sha1sum::$(tar cf - src/ | sha1sum  |  tr -d '[:space:]-')"
     - name: Get Linux Target
       uses: actions/cache@v2
       with:

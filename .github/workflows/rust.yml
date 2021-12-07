@@ -53,7 +53,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: search-api-linux-amd64
-        key: search-api-${{ github.ref }}
+        key: search-api-${{ github.sha }}
     - name: Checkout MacOS
       run: cargo build --release --offline
     - name: Rename macOS target

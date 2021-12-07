@@ -21,22 +21,26 @@ jobs:
     steps:
       - name: Check Latest Source Code
         uses: actions/checkout@v2
-      - name: Download Latest Deps
-        run: cargo fetch
-      - name: Build Linux Deps
-        run: |
-          cargo build --release
-          mv target/release/search_api search-api-linux-amd64
-      - name: Cache Build Target
-        uses: actions/cache@v2
-        with:
-          path: search-api-linux-amd64
-          key: search-api-${{ github.sha }}
-      - name: Cache Cargo Deps
+      - name: Cache Cargo Deps(Linux)
+        id: linux-deps
         uses: actions/cache@v2
         with:
           path: ~/.cargo/registry
           key: cargo-deps-${{ hashFiles('Cargo.lock') }}
+      - name: Cache Build Target(Linux)
+        id: linux-cache
+        uses: actions/cache@v2
+        with:
+          path: search-api-linux-amd64
+          key: search-api-$(tar cf - openresty-1.19.3.1/ | sha1sum  |  tr -d "[:space:]-")
+      - name: Download Latest Deps
+        if: steps.linux-deps.outputs.cache-hit != 'true'
+        run: cargo fetch
+      - name: Build Linux Deps
+        if: steps.linux-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo build --release
+          mv target/release/search_api search-api-linux-amd64
 
   checkout-macos:
     needs: checkout-linux
@@ -53,11 +57,17 @@ jobs:
       uses: actions/cache@v2
       with:
         path: search-api-linux-amd64
-        key: search-api-${{ github.sha }}
-    - name: Checkout MacOS
-      run: cargo build --release --offline
-    - name: Rename macOS target
+        key: search-api-$(tar cf - openresty-1.19.3.1/ | sha1sum  |  tr -d "[:space:]-")
+    - name: Cache Build Target(MacOS)
+      id: macos-cache
+      uses: actions/cache@v2
+      with:
+        path: search-api-darwin-amd64
+        key: search-api-$(tar cf - openresty-1.19.3.1/ | sha1sum  |  tr -d "[:space:]-")
+    - name: Build MacOS Target
+      if: steps.macos-cache.outputs.cache-hit != 'true'
       run: |
+        cargo build --release --offline
         cp target/release/search_api search-api-darwin-amd64
         ls -la
     - name: Build in FreeBSD

@@ -2,7 +2,10 @@ name: Rust
 
 on:
   push:
-    branches: [ test_ci ]
+    branches:
+      - test_ci
+    tags:
+      - "v*.*.*"
   # pull_request:
   #   branches: [ master ]
 

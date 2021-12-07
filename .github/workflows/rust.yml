@@ -36,7 +36,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: search-api-linux-amd64
-          key: search-api-${{ steps.linux-hash.outputs.sha1sum }}
+          key: search-api-linux-${{ steps.linux-hash.outputs.sha1sum }}
       - name: Download Latest Deps
         if: steps.linux-deps.outputs.cache-hit != 'true'
         run: cargo fetch
@@ -61,13 +61,13 @@ jobs:
       uses: actions/cache@v2
       with:
         path: search-api-linux-amd64
-        key: search-api-${{ steps.linux-hash.outputs.sha1sum }}
+        key: search-api-linux-${{ steps.linux-hash.outputs.sha1sum }}
     - name: Cache Build Target(MacOS)
       id: macos-cache
       uses: actions/cache@v2
       with:
         path: search-api-darwin-amd64
-        key: search-api-$(tar cf - openresty-1.19.3.1/ | sha1sum  |  tr -d "[:space:]-")
+        key: search-api-darwin-${{ steps.linux-hash.outputs.sha1sum }}
     - name: Build MacOS Target
       if: steps.macos-cache.outputs.cache-hit != 'true'
       run: |

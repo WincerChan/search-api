@@ -44,13 +44,18 @@ jobs:
     name: Checkout MacOS
     steps:
     - uses: actions/checkout@v2
-    - name: Check out latest
-      run: cargo build --release --offline
-    - name: Get Linux Cache
+    - name: Get Linux Deps
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/registry
+        key: cargo-deps-${{ hashFiles('Cargo.lock') }}
+    - name: Get Linux Target
       uses: actions/cache@v2
       with:
         path: search-api-linux-amd64
         key: search-api-${{ github.ref }}
+    - name: Checkout MacOS
+      run: cargo build --release --offline
     - name: Rename macOS target
       run: |
         cp target/release/search_api search-api-darwin-amd64

@@ -93,5 +93,3 @@ jobs:
           search-api-freebsd-amd64
           search-api-darwin-amd64
           search-api-linux-amd64
-
-

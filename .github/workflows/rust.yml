@@ -2,34 +2,94 @@ name: Rust
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
+      - test_ci
+    tags:
+      - "v*.*.*"
   pull_request:
-    branches: [ master ]
+    branches:
+      - master
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  checkout-linux:
+    name: Checkout Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Latest Source Code
+        uses: actions/checkout@v2
+      - name: Cache Cargo Deps(Linux)
+        id: linux-deps
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/registry
+          key: cargo-deps-${{ hashFiles('Cargo.lock') }}
+      - name: Retrieve Sha1sum
+        id: linux-hash
+        run: |
+          echo "::set-output name=sha1sum::$(tar cf - src/ | sha1sum  |  tr -d '[:space:]-')"
+      - name: Cache Build Target(Linux)
+        id: linux-cache
+        uses: actions/cache@v2
+        with:
+          path: search-api-linux-amd64
+          key: search-api-linux-${{ steps.linux-hash.outputs.sha1sum }}
+      - name: Download Latest Deps
+        if: steps.linux-deps.outputs.cache-hit != 'true'
+        run: cargo fetch
+      - name: Build Linux Deps
+        if: steps.linux-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo build --release
+          mv target/release/search_api search-api-linux-amd64
+
+  checkout-macos:
+    needs: checkout-linux
     runs-on: macos-10.15
-    name: A job to run test FreeBSD
+    name: Checkout MacOS
     steps:
     - uses: actions/checkout@v2
-    - name: Test in FreeBSD
-      id: test
-      if: startsWith(github.event.ref, 'refs/tags/')
+    - name: Get Linux Deps
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/registry
+        key: cargo-deps-${{ hashFiles('Cargo.lock') }}
+    - name: Get Linux Target
+      uses: actions/cache@v2
+      with:
+        path: search-api-linux-amd64
+        key: search-api-linux-${{ steps.linux-hash.outputs.sha1sum }}
+    - name: Cache Build Target(MacOS)
+      id: macos-cache
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/cache@v2
+      with:
+        path: search-api-darwin-amd64
+        key: search-api-darwin-${{ github.sha }}
+    - name: Build MacOS Target
+      if: startsWith(github.ref, 'refs/tags/v') && steps.macos-cache.outputs.cache-hit != 'true'
+      run: |
+        cargo build --release --offline
+        cp target/release/search_api search-api-darwin-amd64
+        ls -la
+    - name: Build in FreeBSD
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: vmactions/freebsd-vm@v0.1.5
       with:
-        mem: 2048
+        mem: 8192
         prepare: pkg install -y rust
         run: |
           cargo build --release
-          cp target/release/search_api search-api-amd64-freebsd13
+          cp target/release/search_api search-api-freebsd-amd64
     - name: Release
       uses: softprops/action-gh-release@v1
-      if: startsWith(github.event.ref, 'refs/tags/')
+      if: startsWith(github.ref, 'refs/tags/v')
       with:
-        body: Test Release Use Actions
-        prerelease: true
-        files: search-api-amd64-freebsd13
-          
+        body_path: RELEASE.md
+        files: |
+          search-api-freebsd-amd64
+          search-api-darwin-amd64
+          search-api-linux-amd64

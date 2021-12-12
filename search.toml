@@ -1,5 +1,5 @@
 [database]
-atom_url = 'http://127.0.0.1:1313/atom.xml'
+atom_url = 'https://blog.itswincer.com/atom.xml'
 tantivy_db = './blog_db'
 [network]
 listen_type = 'tcp'

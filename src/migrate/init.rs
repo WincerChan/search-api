@@ -1,6 +1,11 @@
 use chrono::{DateTime, Utc};
 use tantivy::{
-    schema::{IndexRecordOption, Schema, TextFieldIndexing, TextOptions, INDEXED, STORED, TEXT},
+    collector::TopDocs,
+    query::TermQuery,
+    schema::{
+        Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, INDEXED, STORED,
+        STRING, TEXT,
+    },
     Document, Index, IndexWriter,
 };
 
@@ -21,7 +26,24 @@ pub struct Blog {
     pub url: String,
     pub date: DateTime<Utc>,
     pub category: String,
-    pub tags: String,
+    pub tags: Vec<String>,
+}
+
+pub fn exist_url(field: Field, url: String, index: Index) -> bool {
+    TermQuery::new(Term::from_field_text(field, &url), IndexRecordOption::Basic);
+    let reader = index
+        .reader_builder()
+        .reload_policy(tantivy::ReloadPolicy::OnCommit)
+        .try_into()
+        .unwrap();
+    let searcher = reader.searcher();
+    let top_docs = searcher
+        .search(
+            &TermQuery::new(Term::from_field_text(field, &url), IndexRecordOption::Basic),
+            &TopDocs::with_limit(1),
+        )
+        .expect("search failed");
+    return top_docs.len() > 0;
 }
 
 pub fn build_schema() -> Schema {
@@ -35,9 +57,9 @@ pub fn build_schema() -> Schema {
     // schema_builder.add_i64_field("date", INDEXED | STORED);
     // make date file type to date
     schema_builder.add_date_field("date", INDEXED | STORED);
-    schema_builder.add_text_field("tags", TEXT);
+    schema_builder.add_text_field("tags", STRING);
     schema_builder.add_text_field("category", TEXT);
-    schema_builder.add_text_field("url", TEXT | STORED);
+    schema_builder.add_text_field("url", STRING | STORED);
     return schema_builder.build();
 }
 pub fn add_doc(schema: Schema, writer: &mut IndexWriter, blog: Blog) {
@@ -45,13 +67,15 @@ pub fn add_doc(schema: Schema, writer: &mut IndexWriter, blog: Blog) {
     doc.add_text(schema.get_field("title").unwrap(), blog.title);
     doc.add_text(schema.get_field("content").unwrap(), blog.content);
     doc.add_date(schema.get_field("date").unwrap(), &blog.date);
-    doc.add_text(schema.get_field("tags").unwrap(), blog.tags);
+    blog.tags
+        .iter()
+        .for_each(|tag| doc.add_text(schema.get_field("tags").unwrap(), tag));
     doc.add_text(schema.get_field("category").unwrap(), blog.category);
     doc.add_text(schema.get_field("url").unwrap(), blog.url);
     writer.add_document(doc);
 }
 
-pub fn build_index_writer(path: &str, schema: Schema) -> IndexWriter {
+pub fn build_index(path: &str, schema: Schema) -> Index {
     // check path is exist
     let index = match Path::new(path).join("meta.json").exists() {
         false => Index::create_in_dir(path, schema).unwrap(),
@@ -60,15 +84,22 @@ pub fn build_index_writer(path: &str, schema: Schema) -> IndexWriter {
     index
         .tokenizers()
         .register("UTF-8", QuerySchema::tokenizer());
-    return index.writer(50_000_000).unwrap();
+    index
 }
 
 pub fn init_schema(path: &str, source: &str) {
     let schema = build_schema();
-    let mut index_writer = build_index_writer(path, schema.clone());
+    let index = build_index(path, schema.clone());
+    let mut index_writer = index.writer(50_000_000).unwrap();
 
     for blog in blog_to_feed(source) {
-        add_doc(schema.clone(), &mut index_writer, blog);
+        if !exist_url(
+            schema.get_field("url").unwrap(),
+            blog.url.clone(),
+            index.clone(),
+        ) {
+            add_doc(schema.clone(), &mut index_writer, blog);
+        }
     }
 
     index_writer.commit().unwrap();

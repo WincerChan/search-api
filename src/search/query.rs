@@ -1,7 +1,6 @@
-use collector::TopDocs;
 use std::ops::Bound;
 use tantivy::{
-    collector,
+    collector::TopDocs,
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
     schema::{Field, IndexRecordOption, Schema, Term, Type, Value},
     Document, Index, IndexReader, SnippetGenerator,

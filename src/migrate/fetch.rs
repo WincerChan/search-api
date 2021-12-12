@@ -40,8 +40,7 @@ pub fn parse_feed(feed: Feed) -> Vec<Blog> {
                 .iter()
                 .filter(|c| c.label().is_none())
                 .map(|c| c.term().to_string())
-                .collect::<Vec<String>>()
-                .join(","),
+                .collect::<Vec<String>>(),
         };
         blogs.push(blog);
         // println!("{:?}", entry.summary());

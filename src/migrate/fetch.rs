@@ -5,7 +5,10 @@ use regex::Regex;
 use ureq;
 
 pub fn blog_to_feed(url: &str) -> Vec<Blog> {
-    let body = ureq::get(url).call().unwrap();
+    let body = match ureq::get(url).call() {
+        Ok(res) => res,
+        Err(e) => panic!("{}", e),
+    };
     let atom = body.into_string().expect("Save Atom Failed.");
     let feed = atom.parse::<Feed>().expect("Parse Atom Failed.");
     parse_feed(feed)

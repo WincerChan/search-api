@@ -1,4 +1,5 @@
 use config::read::Network;
+use getopts::Options;
 use ipc::encode_result;
 use serde::Serialize;
 use std::{
@@ -12,7 +13,7 @@ use std::{
 use tantivy::collector::Count;
 
 use std::os::unix::net::UnixListener;
-use std::thread;
+use std::{process::exit, thread};
 mod config;
 mod search;
 use search::QuerySchema;
@@ -198,20 +199,21 @@ fn socket_accept(socket: &Network, qs: QuerySchema) {
     }
 }
 
-fn main() {
-    let args = env::args().collect::<Vec<String>>();
-    if args.len() == 1 {
-        println!(
-            "Run with one argument: 
-        1. init (Initial tanitvy schema and database. this will empty exists directory.)
-        2. migrate (Append new article to exists directory.)
-        3. run (run server with unix domain socket.)
-        4. dev (run server with tcp and accept raw args.)"
-        );
-        return;
-    }
-    let config = config::read_config();
-    match args[1].as_ref() {
+fn print_usage(program: String) {
+    println!(
+        "Usage: {} [init|migrate|run|dev] [-c config] 
+    1. init (Initial tanitvy schema and database. this will empty exists directory.)
+    2. migrate (Append new article to exists directory.)
+    3. run (run server with unix domain socket.)
+    4. dev (run server with tcp and accept raw args.)",
+        program
+    );
+    exit(0)
+}
+
+fn run(config_path: String, instruction: &str) {
+    let config = config::read_config(config_path);
+    match instruction {
         "init" => {
             migrate::create_dir(&config.database.tantivy_db);
             migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
@@ -228,5 +230,30 @@ fn main() {
             dev_accept(&config.network, qs);
         }
         _ => (),
+    }
+}
+
+fn main() {
+    let args = env::args().collect::<Vec<String>>();
+    if args.len() == 1 {
+        print_usage(args[0].clone());
+        return;
+    }
+    let mut opts = Options::new();
+    opts.optopt("c", "config", "config file", "CONFIG");
+    let matches = match opts.parse(&args[2..]) {
+        Ok(m) => m,
+        Err(_) => {
+            println!("{}", "Missing [-c config] argument.");
+            exit(1)
+        }
+    };
+    let config_path = matches.opt_str("c");
+    match config_path {
+        Some(p) => run(p, &args[1]),
+        None => {
+            println!("{}", "Missing [-c config] argument.");
+            print_usage(args[0].clone())
+        }
     }
 }

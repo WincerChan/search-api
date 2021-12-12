@@ -52,8 +52,11 @@ pub fn add_doc(schema: Schema, writer: &mut IndexWriter, blog: Blog) {
 }
 
 pub fn build_index_writer(path: &str, schema: Schema) -> IndexWriter {
-    let index = Index::create_in_dir(path, schema).unwrap();
-    // let index = Index::open_in_dir(path).unwrap();
+    // check path is exist
+    let index = match Path::new(path).join("meta.json").exists() {
+        false => Index::create_in_dir(path, schema).unwrap(),
+        true => Index::open_in_dir(path).unwrap(),
+    };
     index
         .tokenizers()
         .register("UTF-8", QuerySchema::tokenizer());

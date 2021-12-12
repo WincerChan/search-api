@@ -1,5 +1,3 @@
-## v0.1.7
+- Fixed: Do not import existing blogs repeatedly
 
-- Add load blog posts from ATOM links.
-
-- Add release binary for Linux, Freebsd, Darwin.
+- Changed: Use command line args to offer config

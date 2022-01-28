@@ -20,7 +20,7 @@ pub fn blog_to_feed(url: &str) -> Vec<Blog> {
 
 pub fn parse_feed(feed: Feed) -> Vec<Blog> {
     let mut blogs = Vec::new();
-    let re = Regex::new(r"(<(.*?)>)|(&(.*?);)|[\s]").unwrap();
+    let re = Regex::new(r"(<div[\S|\s]+?/div>)|(<[\S|\s]+?>)|(&[\S]+?;)|[\n|[:punct:]]").unwrap();
     for entry in feed.entries() {
         let blog = Blog {
             title: entry.title().to_string(),

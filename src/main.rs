@@ -12,6 +12,7 @@ use std::{
 };
 use tantivy::collector::Count;
 
+use chrono::{Date, NaiveDate, Utc};
 use std::os::unix::net::UnixListener;
 use std::{process::exit, thread};
 mod config;
@@ -44,7 +45,7 @@ struct Response {
 
 fn execute(
     pages: Vec<i64>,
-    range: Vec<String>,
+    range: Vec<i64>,
     terms: Vec<String>,
     q: Vec<String>,
     query_schema: &QuerySchema,
@@ -95,7 +96,7 @@ fn execute(
 fn handle_client<T: Write + Read + Debug>(stream: &mut T, qs: QuerySchema) {
     println!("new client: {:?}", stream);
     loop {
-        let params: (Vec<i64>, Vec<String>, Vec<String>, Vec<String>);
+        let params: (Vec<i64>, Vec<i64>, Vec<String>, Vec<String>);
         match ipc::extract_params(stream) {
             Ok(p) => params = p,
             Err(_) => break,
@@ -131,6 +132,19 @@ where
     }
 }
 
+fn transform_date(date_str: &str) -> i64 {
+    match NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+        Ok(date) => {
+            let d: Date<Utc> = Date::from_utc(date, Utc);
+            d.and_hms(0, 0, 0).timestamp()
+        }
+        Err(_) => {
+            println!("Error parsing {}", date_str);
+            0
+        }
+    }
+}
+
 fn dev_accept(socket: &Network, qs: QuerySchema) {
     let tcp = TcpListener::bind(&socket.listen_addr).expect("Bind to port error");
     for stream in tcp.incoming().into_iter() {
@@ -154,7 +168,7 @@ fn dev_accept(socket: &Network, qs: QuerySchema) {
                                 .collect::<Vec<_>>(),
                             args[1]
                                 .split("~")
-                                .map(|s| s.to_string())
+                                .map(|d| transform_date(d))
                                 .collect::<Vec<_>>(),
                             args[2]
                                 .split(" ")

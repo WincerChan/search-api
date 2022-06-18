@@ -62,7 +62,6 @@ fn execute(
     }
     let content_gen = query_schema.make_snippet_gen(&box_qs[0], query_schema.fields.content);
     let title_gen = query_schema.make_snippet_gen(&box_qs[0], query_schema.fields.title);
-
     let bool_qs = query_schema.make_bool_query(box_qs);
     let searcher = query_schema.reader.searcher();
 

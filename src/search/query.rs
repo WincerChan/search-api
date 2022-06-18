@@ -47,7 +47,7 @@ impl QuerySchema {
             q_vecs.push((
                 Occur::Must,
                 Box::new(TermQuery::new(
-                    Term::from_field_text(field, &p[1].trim().to_lowercase()),
+                    Term::from_field_text(field, &p[1].to_lowercase()),
                     IndexRecordOption::Basic,
                 )),
             ))

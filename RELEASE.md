@@ -1,3 +1,1 @@
-- Fixed: Parsing `DateRange` error
-
-- Chore: Use timestamp as `DateRange` unit
+- Fixed: unable to search by tags

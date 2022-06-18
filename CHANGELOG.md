@@ -1,3 +1,7 @@
+## v0.2.0
+
+- Fixed: unable to search by tags
+
 ## v0.1.9
 
 - Fixed: Parsing `DateRange` error

@@ -4,7 +4,7 @@ use tantivy::{
     query::TermQuery,
     schema::{
         Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, INDEXED, STORED,
-        STRING, TEXT,
+        STRING
     },
     Document, Index, IndexWriter,
 };
@@ -58,7 +58,7 @@ pub fn build_schema() -> Schema {
     // make date file type to date
     schema_builder.add_date_field("date", INDEXED | STORED);
     schema_builder.add_text_field("tags", STRING);
-    schema_builder.add_text_field("category", TEXT);
+    schema_builder.add_text_field("category", STRING);
     schema_builder.add_text_field("url", STRING | STORED);
     return schema_builder.build();
 }
@@ -69,7 +69,7 @@ pub fn add_doc(schema: Schema, writer: &mut IndexWriter, blog: Blog) {
     doc.add_date(schema.get_field("date").unwrap(), &blog.date);
     blog.tags
         .iter()
-        .for_each(|tag| doc.add_text(schema.get_field("tags").unwrap(), tag));
+        .for_each(|tag| doc.add_text(schema.get_field("tags").unwrap(), tag.to_lowercase()));
     doc.add_text(schema.get_field("category").unwrap(), blog.category);
     doc.add_text(schema.get_field("url").unwrap(), blog.url);
     writer.add_document(doc);

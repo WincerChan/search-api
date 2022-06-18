@@ -6,7 +6,7 @@ use tantivy::{
     Document, Index, IndexReader, SnippetGenerator,
 };
 
-use chrono::{Date, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use std::vec;
 
 use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
@@ -121,21 +121,20 @@ impl QuerySchema {
         Ok(vec![Box::new(BooleanQuery::new(querys))])
     }
 
-    fn transform_date_bound(&self, date_str: &str, time: chrono::NaiveTime) -> Bound<Term> {
-        if date_str == "" {
+    fn transform_date_bound(&self, timestamp: i64) -> Bound<Term> {
+        if timestamp == 0 {
             return Bound::Unbounded;
         }
-        let t = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Error parse date.");
-        let d = Date::from_utc(t, Utc);
-        let st = d.and_time(time).expect("Failed add time to date");
-        Bound::Included(Term::from_field_date(self.fields.date, &st))
+        let t = NaiveDateTime::from_timestamp(timestamp, 0);
+        let d = DateTime::from_utc(t, Utc);
+        Bound::Included(Term::from_field_date(self.fields.date, &d))
     }
 
-    pub fn make_date_query(&self, dates: Vec<String>, box_qs: &mut Vec<Box<dyn Query>>) {
+    pub fn make_date_query(&self, dates: Vec<i64>, box_qs: &mut Vec<Box<dyn Query>>) {
         if dates.len() == 0 {
             return;
         }
-        if dates[0] == "" {
+        if dates[0] == 0 {
             return;
         }
         // let x = chrono::DateTime::parse_from_rfc3339("2020-01-23").unwrap();
@@ -144,8 +143,8 @@ impl QuerySchema {
         box_qs.push(Box::new(RangeQuery::new_term_bounds(
             self.fields.date,
             Type::Date,
-            &self.transform_date_bound(&dates[0], NaiveTime::from_hms(0, 0, 0)),
-            &self.transform_date_bound(&dates[1], NaiveTime::from_hms(23, 59, 59)),
+            &self.transform_date_bound(dates[0]),
+            &self.transform_date_bound(dates[1]),
         )))
     }
     pub fn make_snippet_gen(

@@ -62,7 +62,7 @@ fn extract_integer_list(raw_params: &[u8]) -> (Vec<i64>, &[u8]) {
 
 pub fn extract_params<T: Read>(
     stream: &mut T,
-) -> Result<(Vec<i64>, Vec<String>, Vec<String>, Vec<String>), ()> {
+) -> Result<(Vec<i64>, Vec<i64>, Vec<String>, Vec<String>), ()> {
     let length = extract_length(stream);
     if 0 == length {
         return Err(());
@@ -71,7 +71,7 @@ pub fn extract_params<T: Read>(
     stream.read(&mut raw_params).expect("err get params");
     let raw_params = &raw_params[0..];
     let (pages, raw_params) = extract_integer_list(raw_params);
-    let (range, raw_params) = extract_string_list(raw_params);
+    let (range, raw_params) = extract_integer_list(raw_params);
     let (terms, raw_params) = extract_string_list(raw_params);
     let (q, _) = extract_string_list(raw_params);
     Ok((pages, range, terms, q))

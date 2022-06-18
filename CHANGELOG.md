@@ -1,3 +1,7 @@
+## v0.1.9
+
+- Fixed: unable to search by tags
+
 ## v0.1.8
 
 - Fixed: Do not import existing blogs repeatedly

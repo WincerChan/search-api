@@ -3,10 +3,9 @@ use tantivy::{
     collector::TopDocs,
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
     schema::{Field, IndexRecordOption, Schema, Term, Type, Value},
-    Document, Index, IndexReader, SnippetGenerator,
+    DateTime, Document, Index, IndexReader, SnippetGenerator,
 };
 
-use chrono::{DateTime, NaiveDateTime, Utc};
 use std::vec;
 
 use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
@@ -125,9 +124,8 @@ impl QuerySchema {
         if timestamp == 0 {
             return Bound::Unbounded;
         }
-        let t = NaiveDateTime::from_timestamp(timestamp, 0);
-        let d = DateTime::from_utc(t, Utc);
-        Bound::Included(Term::from_field_date(self.fields.date, &d))
+        let d = DateTime::from_unix_timestamp(timestamp);
+        Bound::Included(Term::from_field_date(self.fields.date, d))
     }
 
     pub fn make_date_query(&self, dates: Vec<i64>, box_qs: &mut Vec<Box<dyn Query>>) {
@@ -137,9 +135,6 @@ impl QuerySchema {
         if dates[0] == 0 {
             return;
         }
-        // let x = chrono::DateTime::parse_from_rfc3339("2020-01-23").unwrap();
-        // let t = chrono::NaiveDate::parse_from_str("2021-01-23", "%Y-%m-%d").unwrap();
-        // let x: DateTime = chrono::Date::from_utc(t, chrono::Utc).and_hms(0, 0, 0);
         box_qs.push(Box::new(RangeQuery::new_term_bounds(
             self.fields.date,
             Type::Date,
@@ -165,7 +160,7 @@ impl QuerySchema {
         field_value: &Value,
     ) -> String {
         let value_str = field_value
-            .text()
+            .as_text()
             .unwrap()
             .chars()
             .take(140)
@@ -216,7 +211,7 @@ impl QuerySchema {
                 category: schema.get_field("category").unwrap(),
             },
             schema,
-            query_parser: query_parser,
+            query_parser,
             reader: index
                 .reader_builder()
                 .reload_policy(tantivy::ReloadPolicy::OnCommit)

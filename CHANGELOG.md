@@ -1,3 +1,11 @@
+## v0.3.0
+
+- Fixed: chrono CVE
+
+- Feat: Auto update blog databases
+
+- Chore: Remove redundant deps 
+
 ## v0.2.0
 
 - Fixed: unable to search by tags

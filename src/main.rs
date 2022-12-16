@@ -14,7 +14,6 @@ use time::{format_description, Date};
 
 use std::os::unix::net::UnixListener;
 use std::{process::exit, thread};
-use time::PrimitiveDateTime;
 mod config;
 mod search;
 use search::QuerySchema;

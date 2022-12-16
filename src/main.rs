@@ -1,5 +1,6 @@
 use config::read::Network;
 use ipc::encode_result;
+use migrate::init_schema;
 use serde::Serialize;
 use std::{
     env,
@@ -214,11 +215,9 @@ fn socket_accept(socket: &Network, qs: QuerySchema) {
 
 fn print_usage(program: String) {
     println!(
-        "Usage: {} [init|migrate|run|dev]
-    1. init (Initial tanitvy schema and database. this will empty exists directory.)
-    2. migrate (Append new article to exists directory.)
-    3. run (run server with unix domain socket.)
-    4. dev (run server with tcp and accept raw args.)",
+        "Usage: {} [run|dev]
+    1. run (run server with unix domain socket.)
+    2. dev (run server with tcp and accept raw args.)",
         program
     );
     exit(0)
@@ -226,14 +225,14 @@ fn print_usage(program: String) {
 
 fn run(config_path: String, instruction: &str) {
     let config = config::read_config(config_path);
+    migrate::create_dir(&config.database.tantivy_db);
+    init_schema(&config.database.tantivy_db, &config.database.atom_url);
+    migrate::scheduled_load_schema(
+        &config.database.tantivy_db,
+        config.database.atom_url,
+        config.database.update_interval,
+    );
     match instruction {
-        "init" => {
-            migrate::create_dir(&config.database.tantivy_db);
-            migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
-        }
-        "migrate" => {
-            migrate::init_schema(&config.database.tantivy_db, &config.database.atom_url);
-        }
         "run" => {
             let qs = QuerySchema::new(&config.database.tantivy_db);
             socket_accept(&config.network, qs);

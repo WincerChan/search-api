@@ -5,6 +5,7 @@ use std::{fs::read_to_string, path::Path};
 pub struct Database {
     pub atom_url: String,
     pub tantivy_db: String,
+    pub update_interval: u64,
 }
 
 #[derive(Deserialize)]

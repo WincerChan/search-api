@@ -1,5 +1,4 @@
 use config::read::Network;
-use getopts::Options;
 use ipc::encode_result;
 use serde::Serialize;
 use std::{
@@ -11,8 +10,8 @@ use std::{
     path::Path,
 };
 use tantivy::collector::Count;
+use time::{format_description, Date};
 
-use chrono::{Date, NaiveDate, Utc};
 use std::os::unix::net::UnixListener;
 use std::{process::exit, thread};
 mod config;
@@ -72,15 +71,15 @@ fn execute(
     for (_score, doc_addr) in top_docs {
         let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
         let values = doc.get_sorted_field_values();
-        let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0].value());
-        let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0].value());
+        let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0]);
+        let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0]);
         results.push(Hit {
-            url: values[3].1[0].value().text().expect("Err Url").to_string(),
+            url: values[3].1[0].as_text().expect("Err Url").to_string(),
             date: values[2].1[0]
-                .value()
-                .date_value()
+                .as_date()
                 .expect("Err date")
-                .to_rfc3339(),
+                .into_utc()
+                .to_string(),
             title,
             snippet,
         });
@@ -132,13 +131,15 @@ where
 }
 
 fn transform_date(date_str: &str) -> i64 {
-    match NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-        Ok(date) => {
-            let d: Date<Utc> = Date::from_utc(date, Utc);
-            d.and_hms(0, 0, 0).timestamp()
-        }
-        Err(_) => {
-            println!("Error parsing {}", date_str);
+    if date_str == "" {
+        return 0;
+    }
+    let date_format = format_description::parse("[year]-[month]-[day]").unwrap();
+
+    match Date::parse(date_str, &date_format) {
+        Ok(date) => date.midnight().assume_utc().unix_timestamp(),
+        Err(e) => {
+            println!("Error parsing date `{}`, {}", date_str, e);
             0
         }
     }
@@ -213,7 +214,7 @@ fn socket_accept(socket: &Network, qs: QuerySchema) {
 
 fn print_usage(program: String) {
     println!(
-        "Usage: {} [init|migrate|run|dev] [-c config] 
+        "Usage: {} [init|migrate|run|dev]
     1. init (Initial tanitvy schema and database. this will empty exists directory.)
     2. migrate (Append new article to exists directory.)
     3. run (run server with unix domain socket.)
@@ -245,27 +246,35 @@ fn run(config_path: String, instruction: &str) {
     }
 }
 
+fn locate_config_file() -> String {
+    let paths = ["./", "/etc/", "/usr/local/etc/"];
+    for path in paths {
+        match Path::new(path).join("search.toml").exists() {
+            true => {
+                return Path::new(path)
+                    .join("search.toml")
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+            }
+            false => (),
+        }
+    }
+    println!(
+        "Cannot find config file. Put `search.toml` file in below paths:
+    1. currenct directory
+    2. /etc/
+    3. /usr/local/etc/"
+    );
+    exit(0)
+}
+
 fn main() {
     let args = env::args().collect::<Vec<String>>();
     if args.len() == 1 {
         print_usage(args[0].clone());
         return;
     }
-    let mut opts = Options::new();
-    opts.optopt("c", "config", "config file", "CONFIG");
-    let matches = match opts.parse(&args[2..]) {
-        Ok(m) => m,
-        Err(_) => {
-            println!("{}", "Missing [-c config] argument.");
-            exit(1)
-        }
-    };
-    let config_path = matches.opt_str("c");
-    match config_path {
-        Some(p) => run(p, &args[1]),
-        None => {
-            println!("{}", "Missing [-c config] argument.");
-            print_usage(args[0].clone())
-        }
-    }
+    let conf_path = locate_config_file();
+    run(conf_path, &args[1]);
 }

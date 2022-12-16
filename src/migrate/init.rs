@@ -1,15 +1,14 @@
-use chrono::{DateTime, Utc};
 use tantivy::{
     collector::TopDocs,
     query::TermQuery,
     schema::{
         Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, INDEXED, STORED,
-        STRING
+        STRING,
     },
-    Document, Index, IndexWriter,
+    DateTime, Document, Index, IndexWriter,
 };
 
-use super::fetch::blog_to_feed;
+use super::fetch::fetch_atom;
 use crate::search::QuerySchema;
 use std::{fs, path::Path};
 
@@ -20,13 +19,27 @@ pub fn create_dir(path: &str) {
     fs::create_dir_all(path).unwrap();
 }
 
+#[derive(Debug)]
 pub struct Blog {
     pub title: String,
     pub content: String,
     pub url: String,
-    pub date: DateTime<Utc>,
+    pub date: DateTime,
     pub category: String,
     pub tags: Vec<String>,
+}
+
+impl Default for Blog {
+    fn default() -> Blog {
+        Blog {
+            title: String::new(),
+            content: String::new(),
+            url: String::new(),
+            date: DateTime::from_unix_timestamp(0),
+            category: String::new(),
+            tags: vec![],
+        }
+    }
 }
 
 pub fn exist_url(field: Field, url: String, index: Index) -> bool {
@@ -66,13 +79,13 @@ pub fn add_doc(schema: Schema, writer: &mut IndexWriter, blog: Blog) {
     let mut doc = Document::new();
     doc.add_text(schema.get_field("title").unwrap(), blog.title);
     doc.add_text(schema.get_field("content").unwrap(), blog.content);
-    doc.add_date(schema.get_field("date").unwrap(), &blog.date);
+    doc.add_date(schema.get_field("date").unwrap(), blog.date);
     blog.tags
         .iter()
         .for_each(|tag| doc.add_text(schema.get_field("tags").unwrap(), tag.to_lowercase()));
     doc.add_text(schema.get_field("category").unwrap(), blog.category);
     doc.add_text(schema.get_field("url").unwrap(), blog.url);
-    writer.add_document(doc);
+    writer.add_document(doc).expect("add doc failed.");
 }
 
 pub fn build_index(path: &str, schema: Schema) -> Index {
@@ -92,10 +105,10 @@ pub fn init_schema(path: &str, source: &str) {
     let index = build_index(path, schema.clone());
     let mut index_writer = index.writer(50_000_000).unwrap();
 
-    for blog in blog_to_feed(source) {
+    for blog in fetch_atom(source) {
         if !exist_url(
             schema.get_field("url").unwrap(),
-            blog.url.clone(),
+            blog.url.to_owned(),
             index.clone(),
         ) {
             add_doc(schema.clone(), &mut index_writer, blog);

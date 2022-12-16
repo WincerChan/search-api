@@ -104,16 +104,22 @@ pub fn init_schema(path: &str, source: &str) {
     let schema = build_schema();
     let index = build_index(path, schema.clone());
     let mut index_writer = index.writer(50_000_000).unwrap();
-
+    let mut update_count = 0;
     for blog in fetch_atom(source) {
         if !exist_url(
             schema.get_field("url").unwrap(),
             blog.url.to_owned(),
             index.clone(),
         ) {
+            update_count += 1;
             add_doc(schema.clone(), &mut index_writer, blog);
         }
     }
+    let now = time::OffsetDateTime::now_utc();
+    println!(
+        "{}: Finished build schema, get {} new articles.",
+        now, update_count
+    );
 
     index_writer.commit().unwrap();
     // let reader = index

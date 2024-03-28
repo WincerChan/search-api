@@ -75,21 +75,11 @@ jobs:
         cargo build --release --offline
         cp target/release/search_api search-api-darwin-amd64
         ls -la
-    - name: Build in FreeBSD
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: vmactions/freebsd-vm@v0
-      with:
-        mem: 8192
-        prepare: pkg install -y rust
-        run: |
-          cargo build --release
-          cp target/release/search_api search-api-freebsd-amd64
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/v')
       with:
         body_path: RELEASE.md
         files: |
-          search-api-freebsd-amd64
           search-api-darwin-amd64
           search-api-linux-amd64

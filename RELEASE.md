@@ -1,5 +1,3 @@
-- Fixed: chrono CVE
+- Chore: Update the tantivy version
 
-- Feat: Auto update blog databases
-
-- Chore: Remove redundant deps 
+- Fixed: Fix Date range query

@@ -2,7 +2,7 @@ use std::ops::Bound;
 use tantivy::{
     collector::TopDocs,
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
-    schema::{Field, IndexRecordOption, Schema, Term, Type, Value},
+    schema::{Field, IndexRecordOption, Schema, Term, Value},
     DateTime, Document, Index, IndexReader, SnippetGenerator,
 };
 
@@ -12,8 +12,8 @@ use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
 
 #[derive(Clone)]
 pub struct Fields {
-    url: Field,
-    date: Field,
+    pub url: Field,
+    pub date: Field,
     tags: Field,
     pub title: Field,
     pub content: Field,
@@ -120,26 +120,22 @@ impl QuerySchema {
         Ok(vec![Box::new(BooleanQuery::new(querys))])
     }
 
-    fn transform_date_bound(&self, timestamp: i64) -> Bound<Term> {
+    fn transform_date_bound(&self, timestamp: i64) -> Bound<DateTime> {
         if timestamp == 0 {
             return Bound::Unbounded;
         }
-        let d = DateTime::from_unix_timestamp(timestamp);
-        Bound::Included(Term::from_field_date(self.fields.date, d))
+        let d = DateTime::from_timestamp_secs(timestamp);
+        Bound::Included(d)
     }
 
     pub fn make_date_query(&self, dates: Vec<i64>, box_qs: &mut Vec<Box<dyn Query>>) {
         if dates.len() == 0 {
             return;
         }
-        if dates[0] == 0 {
-            return;
-        }
-        box_qs.push(Box::new(RangeQuery::new_term_bounds(
-            self.fields.date,
-            Type::Date,
-            &self.transform_date_bound(dates[0]),
-            &self.transform_date_bound(dates[1]),
+        box_qs.push(Box::new(RangeQuery::new_date_bounds(
+            "date".to_string(),
+            self.transform_date_bound(dates[0]),
+            self.transform_date_bound(dates[1]),
         )))
     }
     pub fn make_snippet_gen(

@@ -1,3 +1,3 @@
 pub mod query;
 
-pub use query::{Fields, QuerySchema};
+pub use query::QuerySchema;

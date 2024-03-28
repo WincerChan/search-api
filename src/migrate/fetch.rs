@@ -70,7 +70,7 @@ fn parse_single<'a: 'b, 'b>(mut reader: Reader<&'a [u8]>) -> (Reader<&'b [u8]>, 
     //     Regex::new(r"(<(div)|(script)[\S|\s]+?/(div)|(script)>)|(</?code>)|(</?strong>)｜(<li>)")
     //         .unwrap();
     let re1 =
-        Regex::new(r"(<!.*?>)|(<div[\S|\s]+?/div>)|(<script.*?/script>)|(</?[a-z]+[\S|\s]*?>)")
+        Regex::new(r"(<!.*?>)|(<div[\S|\s]+?/div>)|(<script.*?/script>)|(</?[a-zA-Z]+[\S|\s]*?>)")
             .unwrap();
     let re2 = Regex::new(r"([\n|\x20|\xa0]+)").unwrap();
     loop {

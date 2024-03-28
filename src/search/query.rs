@@ -2,7 +2,7 @@ use std::ops::Bound;
 use tantivy::{
     collector::TopDocs,
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
-    schema::{Field, IndexRecordOption, Schema, Term, Type, Value},
+    schema::{Field, IndexRecordOption, Schema, Term, Value},
     DateTime, Document, Index, IndexReader, SnippetGenerator,
 };
 
@@ -12,8 +12,8 @@ use crate::tokenizer::{segmentation::cut_string, UTF8Tokenizer};
 
 #[derive(Clone)]
 pub struct Fields {
-    url: Field,
-    date: Field,
+    pub url: Field,
+    pub date: Field,
     tags: Field,
     pub title: Field,
     pub content: Field,

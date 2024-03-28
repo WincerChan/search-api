@@ -1,3 +1,9 @@
+## v0.3.3
+
+- Chore: Update the tantivy version
+
+- Fixed: Fix Date range query
+
 ## v0.3.1
 
 - Fixed: chrono CVE

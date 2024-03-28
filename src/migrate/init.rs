@@ -35,7 +35,7 @@ impl Default for Blog {
             title: String::new(),
             content: String::new(),
             url: String::new(),
-            date: DateTime::from_unix_timestamp(0),
+            date: DateTime::from_timestamp_secs(0),
             category: String::new(),
             tags: vec![],
         }

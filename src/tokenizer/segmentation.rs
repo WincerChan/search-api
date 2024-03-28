@@ -1,4 +1,4 @@
-use tantivy::tokenizer::{BoxTokenStream, Token, Tokenizer};
+use tantivy::tokenizer::{Token, Tokenizer};
 
 use super::tokenstream::UTF8TokenStream;
 
@@ -36,7 +36,9 @@ pub fn cut_string(text: &str) -> Vec<&str> {
 }
 
 impl Tokenizer for UTF8Tokenizer {
-    fn token_stream<'a>(&self, text: &'a str) -> BoxTokenStream<'a> {
+    type TokenStream<'a> = UTF8TokenStream;
+
+    fn token_stream<'a>(&'a mut self, text: &'a str) -> UTF8TokenStream {
         let words = cut_string(text);
         let mut offset = 0usize;
         let mut tokens = Vec::with_capacity(words.len());
@@ -52,6 +54,6 @@ impl Tokenizer for UTF8Tokenizer {
             offset = next;
             tokens.push(token);
         }
-        BoxTokenStream::from(UTF8TokenStream { tokens, offset: 0 })
+        UTF8TokenStream { tokens, offset: 0 }
     }
 }

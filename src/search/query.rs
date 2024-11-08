@@ -17,7 +17,7 @@ pub struct Fields {
     tags: Field,
     pub title: Field,
     pub content: Field,
-    category: Field,
+    pub category: Field,
 }
 
 // static DELIMITER: &str = ",";

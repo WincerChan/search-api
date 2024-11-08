@@ -70,8 +70,8 @@ pub fn build_schema() -> Schema {
     // schema_builder.add_i64_field("date", INDEXED | STORED);
     // make date file type to date
     schema_builder.add_date_field("date", INDEXED | STORED | FAST);
-    schema_builder.add_text_field("tags", STRING);
-    schema_builder.add_text_field("category", STRING);
+    schema_builder.add_text_field("tags", STRING | STORED);
+    schema_builder.add_text_field("category", STRING | STORED);
     schema_builder.add_text_field("url", STRING | STORED);
     return schema_builder.build();
 }

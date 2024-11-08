@@ -30,6 +30,8 @@ struct Hit {
     date: String,
     title: String,
     snippet: String,
+    category: String,
+    tags: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -76,12 +78,19 @@ fn execute(
             let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0]);
             let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0]);
             results.push(Hit {
-                url: values[3].1[0].as_text().expect("Err Url").to_string(),
+                url: values[5].1[0].as_text().expect("Err Url").to_string(),
                 date: values[2].1[0]
                     .as_date()
                     .expect("Err date")
                     .into_utc()
                     .to_string(),
+                category: values[4].1[0].as_text().expect("Err Category").to_string(),
+                tags: values[3]
+                    .1
+                    .to_vec()
+                    .into_iter()
+                    .map(|x| x.as_text().expect("Err tag").to_string())
+                    .collect(),
                 title,
                 snippet,
             });
@@ -100,12 +109,19 @@ fn execute(
             let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0]);
             let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0]);
             results.push(Hit {
-                url: values[3].1[0].as_text().expect("Err Url").to_string(),
+                url: values[5].1[0].as_text().expect("Err Url").to_string(),
                 date: values[2].1[0]
                     .as_date()
                     .expect("Err date")
                     .into_utc()
                     .to_string(),
+                category: values[4].1[0].as_text().expect("Err Category").to_string(),
+                tags: values[3]
+                    .1
+                    .to_vec()
+                    .into_iter()
+                    .map(|x| x.as_text().expect("Err tag").to_string())
+                    .collect(),
                 title,
                 snippet,
             });

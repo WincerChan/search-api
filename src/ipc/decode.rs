@@ -74,5 +74,10 @@ pub fn extract_params<T: Read>(
     let (range, raw_params) = extract_integer_list(raw_params);
     let (terms, raw_params) = extract_string_list(raw_params);
     let (q, _) = extract_string_list(raw_params);
-    Ok((pages, range, terms, q))
+    Ok((
+        pages,
+        range,
+        terms,
+        q.into_iter().filter(|x| !x.is_empty()).collect(),
+    ))
 }

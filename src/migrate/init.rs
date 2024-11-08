@@ -2,8 +2,8 @@ use tantivy::{
     collector::TopDocs,
     query::TermQuery,
     schema::{
-        Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, INDEXED, STORED,
-        STRING,
+        Field, IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions, FAST, INDEXED,
+        STORED, STRING,
     },
     DateTime, Document, Index, IndexWriter,
 };
@@ -69,7 +69,7 @@ pub fn build_schema() -> Schema {
     schema_builder.add_text_field("content", text_options.clone() | STORED);
     // schema_builder.add_i64_field("date", INDEXED | STORED);
     // make date file type to date
-    schema_builder.add_date_field("date", INDEXED | STORED);
+    schema_builder.add_date_field("date", INDEXED | STORED | FAST);
     schema_builder.add_text_field("tags", STRING);
     schema_builder.add_text_field("category", STRING);
     schema_builder.add_text_field("url", STRING | STORED);

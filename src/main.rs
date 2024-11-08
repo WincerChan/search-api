@@ -50,7 +50,7 @@ fn execute(
     q: Vec<String>,
     query_schema: &QuerySchema,
 ) -> String {
-    let kq = query_schema.make_keyword_query(q);
+    let kq = query_schema.make_keyword_query(q.clone());
     if kq.is_err() {
         return format!("{{\"err_msg\": \"{}\"}}\n", kq.unwrap_err().to_string());
     }
@@ -65,26 +65,53 @@ fn execute(
     let bool_qs = query_schema.make_bool_query(box_qs);
     let searcher = query_schema.reader.searcher();
 
-    let (top_docs, num) = searcher
-        .search(&bool_qs, &(query_schema.make_paginate(pages), Count))
-        .expect("Search Failed");
     let mut results: Vec<Hit> = Vec::with_capacity(DEFAULT_MAX_SIZE);
-    for (_score, doc_addr) in top_docs {
-        let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
-        let values = doc.get_sorted_field_values();
-        let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0]);
-        let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0]);
-        results.push(Hit {
-            url: values[3].1[0].as_text().expect("Err Url").to_string(),
-            date: values[2].1[0]
-                .as_date()
-                .expect("Err date")
-                .into_utc()
-                .to_string(),
-            title,
-            snippet,
-        });
-    }
+    let (results, num) = if !q.is_empty() {
+        let (top_docs, num) = searcher
+            .search(&bool_qs, &(query_schema.make_paginate(pages), Count))
+            .expect("Search Failed");
+        for (_score, doc_addr) in top_docs {
+            let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
+            let values = doc.get_sorted_field_values();
+            let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0]);
+            let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0]);
+            results.push(Hit {
+                url: values[3].1[0].as_text().expect("Err Url").to_string(),
+                date: values[2].1[0]
+                    .as_date()
+                    .expect("Err date")
+                    .into_utc()
+                    .to_string(),
+                title,
+                snippet,
+            });
+        }
+        (results, num)
+    } else {
+        let (top_docs, num) = searcher
+            .search(
+                &bool_qs,
+                &(query_schema.make_paginate_with_sort(pages), Count),
+            )
+            .expect("Search Failed");
+        for (_score, doc_addr) in top_docs {
+            let doc = searcher.doc(doc_addr).expect("Not Found Document Address");
+            let values = doc.get_sorted_field_values();
+            let title = query_schema.make_snippet_value(&title_gen, &doc, values[0].1[0]);
+            let snippet = query_schema.make_snippet_value(&content_gen, &doc, values[1].1[0]);
+            results.push(Hit {
+                url: values[3].1[0].as_text().expect("Err Url").to_string(),
+                date: values[2].1[0]
+                    .as_date()
+                    .expect("Err date")
+                    .into_utc()
+                    .to_string(),
+                title,
+                snippet,
+            });
+        }
+        (results, num)
+    };
     let se_result = serde_json::json!(Response {
         count: num,
         data: results,
@@ -178,6 +205,7 @@ fn dev_accept(socket: &Network, qs: QuerySchema) {
                             args[3]
                                 .split(" ")
                                 .map(|s| s.to_string())
+                                .filter(|s| !s.is_empty())
                                 .collect::<Vec<_>>(),
                             &qs,
                         );

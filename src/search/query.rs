@@ -1,9 +1,9 @@
 use std::ops::Bound;
 use tantivy::{
-    collector::TopDocs,
+    collector::{Collector, TopDocs},
     query::{BooleanQuery, Occur, PhraseQuery, Query, QueryParser, RangeQuery, TermQuery},
     schema::{Field, IndexRecordOption, Schema, Term, Value},
-    DateTime, Document, Index, IndexReader, SnippetGenerator,
+    DateTime, DocAddress, Document, Index, IndexReader, SnippetGenerator,
 };
 
 use std::vec;
@@ -179,6 +179,16 @@ impl QuerySchema {
         let page = pages[0] as usize;
         let size = pages[1] as usize;
         TopDocs::with_limit(size).and_offset((page - 1) * size)
+    }
+    pub fn make_paginate_with_sort(
+        &self,
+        pages: Vec<i64>,
+    ) -> impl Collector<Fruit = Vec<(DateTime, DocAddress)>> {
+        let page = pages[0] as usize;
+        let size = pages[1] as usize;
+        TopDocs::with_limit(size)
+            .and_offset((page - 1) * size)
+            .order_by_fast_field("date", tantivy::Order::Desc)
     }
 
     pub fn make_bool_query(&self, q_vecs: Vec<Box<dyn Query>>) -> BooleanQuery {
